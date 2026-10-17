@@ -365,7 +365,7 @@ learning-agent/
 
 ## 9. 骨架阶段要先验证的点
 
-**10-03 已全部实测通过**，细节和 4 个注意事项见 [compatibility.md](compatibility.md) 的 S1–S7。
+**10-03 已全部实测通过**，细节和 4 个注意事项见 [compatibility.md](history/2026-10-compatibility.md) 的 S1–S7。
 
 1. 精确路由能否做持续推送（`/api/learning/feed`），浏览器端的认证能否通过。
 2. 外壳声明自己的插槽后，其他单元能否把页面注册进去，并且显示在 dockview 的标签页里。
@@ -465,7 +465,7 @@ learning-agent/
 - 云端每段结果由 `library` 保存到导入任务目录，只有覆盖全部原 PDF 页且合并验证通过才发布资料。失败段按更小范围补跑；达到自动重试上限后保留成功结果，手动重试仍只补缺页。页段保存与恢复是 library 内部实现，不增加其他单元的数据主人。
 - 共享控件从 `@learning-agent/kit/client` 导出，样式由 `shell` 提供。仅复用界面能力，不持有业务数据；页面继续经服务和推送协作。底层语义 HTML 和隐藏文件输入保留，呈现使用统一设计。GPT 接续部分的审美复核记录在 PLAN，来源为用户要求。
 
-**设置项与设置页（10-05，调研见 [docs/settings/research.md](../settings/research.md)）：**
+**设置项与设置页（10-05，调研见 [docs/settings/research.md](settings/research.md)）：**
 
 - 学习者可以改的选项是各单元 Config 里加了 `.volatile()` 的字段，经 DSH 的设置服务读写（带版本号，旧版本的写入会被拒绝），保存在已安装 profile 的 `cordis.patch.yml`。单元每次使用时读取当前值，改了不用重启。目前有：`library` 的 `parser`（`cloud` / `local`）、`localParserUrl`、`semanticSearch`；`tutor` 的 `model`；`sidechat` 的 `model`、`summaryModel`、`restrictDuringTests`；`textbook` 的 `model`；`assess` 的 `model`。
 - 角色模型字段写作 `厂商/模型`，带 `role: 'learning-model'` 和角色名（`kit/settings` 的 `roleModel`）；没设置时跟随 DSH 的默认模型。会话创建时按角色选模型；角色设置或默认模型变了，正在进行的主老师和侧边提问会话也换过去（`sessionController.selectModel`）。
@@ -478,7 +478,7 @@ learning-agent/
 - 插件清单只读：列出组合包 `@learning-agent/app` 的单元（图标、名称、说明、运行状态、哪些角色用它的工具），学习单元都是必需的，不能单独关掉；DSH 自己的组件折叠显示。
 
 
-**资料库 C：联网找权威资料（10-07，调研见 [docs/library/research.md](../library/research.md)）：**
+**资料库 C：联网找权威资料（10-07，调研见 [docs/library/research.md](library/research.md)）：**
 
 - `Source.origin` 为 `web` 时多一个 `format`：`html`（存成 Markdown 的网页，没有页码，片段都在"第 1 页"、按顺序编号，出处标签只有书名号里的标题）或 `pdf`（和上传的一样经 MinerU 解析，出处带页码）。网上 PDF 的 `LibraryImport.url` 记原网址，完成后的资料据此写成网页来源。网页资料的 `kind` 是 `web`；网上 PDF 按网站规则记为 `paper`、`standard` 或 `other`。
 - 新数据：`WebCandidate`（一条搜索结果：网址、标题、摘要、网站、机构即注册域名、权威级别和理由、格式、搜索服务、发布日期、对应的问题）、`WebPending`（老师提出、等学习者确认的三级资料，带老师的理由）、`SiteRule`（学习者给某个网站设的级别，可以是 `blocked`；覆盖内置规则，子域名一起生效）。
@@ -760,7 +760,7 @@ learning-agent/
 | kit `ContextMenu` | 在指针处弹出的菜单（标签的右键菜单） |
 | assess 测试页 | 离开页面（换页或关标签）时立即保存还没保存的作答 |
 
-**资料库分层：资料仓库和本课资料（10-16，Claude，调研见 [docs/library/research.md](../library/research.md)"资料库分层调研"）：**
+**资料库分层：资料仓库和本课资料（10-16，Claude，调研见 [docs/library/research.md](library/research.md)"资料库分层调研"）：**
 
 | 改动 | 说明 |
 |---|---|
@@ -774,7 +774,7 @@ learning-agent/
 | 阅读页参数 | `library.sources` 可带 `{ sourceId, page }` 打开到 PDF 某页；带 `{ import: true }`（课程里）时展开"从资料库加入"和导入 PDF。阅读器把标签标题改成资料名；同一份 PDF 在几处打开只加载一次 |
 | 外壳的 Esc | 浮着的侧栏里的菜单用 Esc 关闭时（`preventDefault`），外壳不再连侧栏一起收起 |
 
-**知识图谱改版：力导向和侧栏局部图（10-16，Claude，调研见 [docs/knowledge/research.md](../knowledge/research.md)第 15 节）：**
+**知识图谱改版：力导向和侧栏局部图（10-16，Claude，调研见 [docs/knowledge/research.md](knowledge/research.md)第 15 节）：**
 
 | 改动 | 说明 |
 |---|---|

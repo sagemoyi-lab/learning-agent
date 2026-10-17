@@ -56,10 +56,10 @@ Agent 当老师：和你确认目标，摸清你的知识边界，一个阶段�
 | [journey.md](journey.md) | 一门课从建课到结课的完整流程；一个课时怎么走；所有修改共用的流程 |
 | `<单元>/design.md` | 每个单元一份（链接见下面的单元地图）：管什么、现状、怎么运作、关键决定、待定问题 |
 | `<单元>/research.md` | 单元做深前的专门调研（目前有 [library](library/research.md)、[settings](settings/research.md)、[knowledge](knowledge/research.md)、[goal](goal/research.md)、[assess](assess/research.md)、[curriculum](curriculum/research.md)、[textbook](textbook/research.md)、[annotation](annotation/research.md)、[sidechat](sidechat/research.md)、[tutor](tutor/research.md)、[learner](learner/research.md)、[planner](planner/research.md)） |
-| [decisions.md](decisions.md) | 决策记录：按日期一行一个决定和它的来源；被后来的决定取代的行有标注 |
-| [stage0/contracts.md](stage0/contracts.md) | 单元之间的契约：数据对象、服务、事件、插槽、工具 |
-| [stage0/compatibility.md](stage0/compatibility.md) | 验证记录：实测了什么、结果、发现的限制 |
-| [stage0/research.md](stage0/research.md) | 阶段 0 的调研报告 |
+| [decisions.md](history/2026-10-decisions.md) | 决策记录：按日期一行一个决定和它的来源；被后来的决定取代的行有标注 |
+| [stage0/contracts.md](contracts.md) | 单元之间的契约：数据对象、服务、事件、插槽、工具 |
+| [stage0/compatibility.md](history/2026-10-compatibility.md) | 验证记录：实测了什么、结果、发现的限制 |
+| [stage0/research.md](history/2026-10-stage0-research.md) | 阶段 0 的调研报告 |
 | [history/2026-10-stage0.md](history/2026-10-stage0.md) | 10-03 至 10-05 的进度日记，冻结不再修改 |
 | [throughts.md](throughts.md) | 你的原话 |
 
@@ -160,8 +160,8 @@ DSH 本身就是"一切皆插件"的设计：一个 profile 由一层层 bundle 
 
 ### 阶段 0：底座、契约、骨架（已完成）
 
-1. **技术验证：** DSH 当后端（整页接管、前端调用后端、课程复用工作区、程序建会话、自定义搜索提供者、工具限制）、MinerU 解析、搜索基准、拍照手写识别、前端空壳。结论见 [stage0/compatibility.md](stage0/compatibility.md) V0–V9。
-2. **定契约：** 数据对象、插件之间的服务和事件、课程文件夹的结构，见 [stage0/contracts.md](stage0/contracts.md)。
+1. **技术验证：** DSH 当后端（整页接管、前端调用后端、课程复用工作区、程序建会话、自定义搜索提供者、工具限制）、MinerU 解析、搜索基准、拍照手写识别、前端空壳。结论见 [stage0/compatibility.md](history/2026-10-compatibility.md) V0–V9。
+2. **定契约：** 数据对象、插件之间的服务和事件、课程文件夹的结构，见 [stage0/contracts.md](contracts.md)。
 3. **搭薄骨架：** 每个功能单元先做最简版本，跑通最小学习流程：
    - 建课 → 确认目标 → 3 道摸底题 → 一页阶段设计 → 一节教材
    - → 发布阅读任务 → 小测 → 更新掌握状态 → 一次侧边会话写入总结
@@ -244,7 +244,7 @@ DSH 本身就是"一切皆插件"的设计：一个 profile 由一层层 bundle 
 
 ## 9. 待研究问题
 
-大方向上的问题都已经答完（答案见[决策记录](decisions.md)）。其余细节在各单元开工前的调研里讨论，记在各单元设计文档的"待定问题"里。
+大方向上的问题都已经答完（答案见[决策记录](history/2026-10-decisions.md)）。其余细节在各单元开工前的调研里讨论，记在各单元设计文档的"待定问题"里。
 
 ---
 

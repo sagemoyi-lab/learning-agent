@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # Install (or refresh) the `learning` DSH profile and link our workspace packages into it.
 # Run from the repo root after `pnpm build`:   sh scripts/dev-profile.sh
-# Then start DSH from a directory without .env (see docs/stage0/compatibility.md V0):
+# Then start DSH from a directory without .env (see docs/history/2026-10-compatibility.md V0):
 #   . .tools/dsh-env.sh && cd .dsh-home/work && dsh learning --no-open --port 3180
 #
 # The workbench is the @learning-agent/app bundle. The profile's own package.json (bundle selection)

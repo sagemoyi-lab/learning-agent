@@ -24,7 +24,7 @@ cd ../.. && . .tools/dsh-env.sh
 mkdir -p .dsh-home/profiles/learning && cp spikes/stage0/profile/* .dsh-home/profiles/learning/
 cd .dsh-home/work && dsh plugin --profile learning add "link:$(cd ../../spikes/stage0/learning-spike && pwd -W)"
 
-# 3. 启动（必须在没有 .env 的目录里启动，见 docs/stage0/compatibility.md V0）
+# 3. 启动（必须在没有 .env 的目录里启动，见 docs/history/2026-10-compatibility.md V0）
 dsh learning --no-open --port 3180
 ```
 

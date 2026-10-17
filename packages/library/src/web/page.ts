@@ -1,5 +1,5 @@
 // A web page as citable chunks: decode, keep the main text (Mozilla Readability, which found the article
-// on old university sites where Defuddle took the navigation; compatibility.md 10-07), turn it into
+// on old university sites where Defuddle took the navigation; docs/history/2026-10-compatibility.md, 10-07), turn it into
 // Markdown, and split it into blocks. Pages have no page numbers: every chunk is on "page 1", in order.
 import { Readability } from '@mozilla/readability'
 import { parseHTML } from 'linkedom'

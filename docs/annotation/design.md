@@ -1,6 +1,6 @@
 # 批注（annotation）
 
-> 代码：[`packages/annotation`](../../packages/annotation) · 接口：[契约](../stage0/contracts.md) §4.5（Block、Annotation）、§5.1（`learnAnnotation`）和 §11 末尾的"批注与侧边会话做深的接口补充" · 验证：[A](../stage0/compatibility.md#annotation-a批注的记录定位和界面10-10grok-bot)、[A 的 Claude 复核](../stage0/compatibility.md#annotation-与-sidechat-的复核和-tutor-c10-10claude)、[B 与 C](../stage0/compatibility.md#annotationsidechat-b-与-c10-11claude) · 调研：[做深调研](research.md)、[复核](review.md)
+> 代码：[`packages/annotation`](../../packages/annotation) · 接口：[契约](../contracts.md) §4.5（Block、Annotation）、§5.1（`learnAnnotation`）和 §11 末尾的"批注与侧边会话做深的接口补充" · 验证：[A](../history/2026-10-compatibility.md#annotation-a批注的记录定位和界面10-10grok-bot)、[A 的 Claude 复核](../history/2026-10-compatibility.md#annotation-与-sidechat-的复核和-tutor-c10-10claude)、[B 与 C](../history/2026-10-compatibility.md#annotationsidechat-b-与-c10-11claude) · 调研：[做深调研](research.md)、[复核](../history/2026-10-annotation-review.md)
 
 批注负责你在教材和资料上划线、写批注：记下你选的原句，教材改过之后还能找到它，并把批注转成侧边会话、修改提案或"有疑点"信号。
 
@@ -9,7 +9,7 @@
 - **A 批已技术验收，待你试用：** Grok Bot 实现（后端、教材里的批注、"批注"页），Claude 10-10 复核后保留后端，重做了界面（正文里标出原句、段落下一行一条、批注页按课时分组），补上报错的去向（主老师核对后改正或说明理由，见 [tutor](../tutor/design.md) C）。在 3182 上用 DeepSeek 实测了报错→老师改正→批注显示结果，以及疑问→侧边提问→总结。批注转侧边会话后，右侧栏会自己显示新会话：`annotation` 在会话建好、批注关联上它之后发出 `learning/annotation-changed`，sidechat 的页面监听这个事件重新读取当前会话，见 [sidechat](../sidechat/design.md)。
 - **B 批已技术验收，待你试用：** 资料原文上可以批注（在资料阅读器里点页面上的一段，或打开某个出处，在识别出的文字上选中一句）；"我的理解"可以点"请老师看看"，在侧边提问里按资料给反馈。编辑、已解决、疑问转侧边提问在 A 批已有。
 - **C 批已技术验收，待你试用：** 批注的侧边提问结束后，批注上显示那次的结论和记下的可能误解；每条误解所在的知识点后来有没有独立做对、还差什么，也写在批注上。报错转提案在 A 批和 tutor C 已有。
-- B、C 用自动测试和 3182 上的截图（三种宽度、深浅两色，合成资料）验收。10-11 Claude 在本机 3182 上用 DeepSeek 联调了"请老师看看"：老师先说哪些和资料一致（带出处），再指出缺了摩尔质量这一处并反问，没有打分；误解按原话记下，批注上显示结论、误解和这个知识点还差什么。资料阅读器里点页面上的一段能选中解析出的片段（见[验证记录](../stage0/compatibility.md#annotationsidechat-b-与-c-的真实模型联调10-11claude)）。
+- B、C 用自动测试和 3182 上的截图（三种宽度、深浅两色，合成资料）验收。10-11 Claude 在本机 3182 上用 DeepSeek 联调了"请老师看看"：老师先说哪些和资料一致（带出处），再指出缺了摩尔质量这一处并反问，没有打分；误解按原话记下，批注上显示结论、误解和这个知识点还差什么。资料阅读器里点页面上的一段能选中解析出的片段（见[验证记录](../history/2026-10-compatibility.md#annotationsidechat-b-与-c-的真实模型联调10-11claude)）。
 - **还没做：**
   - PDF 页面上的文字层和任意圈选的区域：资料批注挂在解析出的片段上，选的是片段的识别文字；扫描版和公式以识别文字为准，要对照原文；
   - 跨段选区：一条批注只属于一个段落（或一个资料片段）；
@@ -63,7 +63,7 @@
 - **"我的理解"的反馈只在你要时给，走侧边提问**（10-11，Claude 按调研推荐）：不做后台初筛，不给理解打分，模型的认可不算证据；误解要有你的原话才记信号。
 - **批注上显示误解后来的检查结果**（10-11，Claude，调研 C 批"理解信号与检查结果关联"）：只读已有的总结、日志和状态，不另存。
 
-完整的决定和来源见[决策记录](../decisions.md)。
+完整的决定和来源见[决策记录](../history/2026-10-decisions.md)。
 
 ## 待定问题
 

@@ -1,4 +1,4 @@
-// What DSH needs to load a unit that tests mounting from source cannot show (docs/stage0/compatibility.md, handoff review):
+// What DSH needs to load a unit that tests mounting from source cannot show (docs/history/2026-10-compatibility.md, handoff review):
 // every `@deepseek-ai/*` package a unit's host bundle leaves for DSH to supply must be declared in its package.json,
 // or DSH reports "failed to import" for that unit. (annotation once shipped without `dsh-llm` and `dsh-tools`.)
 import { readFileSync, readdirSync, existsSync } from 'node:fs'

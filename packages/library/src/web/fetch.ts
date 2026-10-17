@@ -5,7 +5,7 @@
 //
 // Fake-IP proxies (Clash, sing-box, Surge; common in China) answer every name with an address from
 // 198.18.0.0/15 and connect by name. Those answers are let through, or nothing could be fetched behind
-// such a proxy; where the proxy finally connects cannot be checked here (compatibility.md, 10-07).
+// such a proxy; where the proxy finally connects cannot be checked here (docs/history/2026-10-compatibility.md, 10-07).
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns'
 import http, { type IncomingMessage } from 'node:http'
 import https from 'node:https'

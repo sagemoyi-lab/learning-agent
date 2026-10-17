@@ -1,6 +1,6 @@
 # 设置（settings）
 
-> 代码：[`packages/settings`](../../packages/settings)；设置项的读取在 [`packages/kit/src/settings.ts`](../../packages/kit/src/settings.ts) · 调研：[research.md](research.md) · 接口：[契约](../stage0/contracts.md) §11"设置项与设置页" · 验证：[验证记录](../stage0/compatibility.md)"设置与插件接口只读探查""设置页实施"各节
+> 代码：[`packages/settings`](../../packages/settings)；设置项的读取在 [`packages/kit/src/settings.ts`](../../packages/kit/src/settings.ts) · 调研：[research.md](research.md) · 接口：[契约](../contracts.md) §11"设置项与设置页" · 验证：[验证记录](../history/2026-10-compatibility.md)"设置与插件接口只读探查""设置页实施"各节
 
 设置页管运行环境：模型、在线服务和密钥、外观、数据位置和发往在线服务的内容、插件。它不管学习安排：目标、节奏、测试条件、给多少帮助，都和主老师商量，修改走[统一的修改流程](../journey.md#所有修改都走同一条路)；也不提供"学习风格"选项。DSH 的命令行、沙箱、子智能体、权限预设这类编程功能的设置不显示。
 
@@ -62,4 +62,4 @@
 - **模型由你在设置里配置；插件以 DeepSeek 为基准设计**（10-03，你）：模型策略见 [PLAN](../PLAN.md)"模型策略"。
 - **每个模型服务有"高级设置"：上下文窗口、最大输出、思考档位，按模型改**（10-16，你提出，Claude 按调研设计）：写进 DSH 原本存这些值的地方（DeepSeek 的模型列表、自定义接口的模型列表、DSH 认识的厂商的按模型覆盖项）；一次性调用的输出额度不超过设的最大输出；"测试连接"测默认模型时带上它的思考强度。没做思考参数的写法、思考的 token 预算和输入类型。
 
-完整的决定和来源见[决策记录](../decisions.md)。
+完整的决定和来源见[决策记录](../history/2026-10-decisions.md)。

@@ -2,11 +2,11 @@
 
 一个本地运行的个人学习工作台，基于 DeepSeek Harness（DSH，cordis 插件体系）开发。
 
-- 总体计划：[docs/PLAN.md](docs/PLAN.md)（总览和文档地图）；每个单元的设计、现状和关键决定在 `docs/<单元>/design.md`，决策记录在 [docs/decisions.md](docs/decisions.md)
+- 总体计划：[docs/PLAN.md](docs/PLAN.md)（总览和文档地图）；每个单元的设计、现状和关键决定在 `docs/<单元>/design.md`，决策记录在 [docs/history/2026-10-decisions.md](docs/history/2026-10-decisions.md)
 - 接续开发的约定（所有接手的助手共用）：[AGENTS.md](AGENTS.md)
-- 插件之间的契约：[docs/stage0/contracts.md](docs/stage0/contracts.md)
-- 验证记录：[docs/stage0/compatibility.md](docs/stage0/compatibility.md)
-- 开发技能（接手验收、界面审美复核等具体做法，Claude 和 Codex 共用）：[.agents/skills/](.agents/skills/)，用法见 AGENTS.md 的"技能"一节
+- 插件之间的契约：[docs/contracts.md](docs/contracts.md)
+- 验证记录：[docs/history/2026-10-compatibility.md](docs/history/2026-10-compatibility.md)
+- 开发技能（接手验收、界面审美复核等具体做法，Claude 和 Codex 共用）：[.agents/skills/](.agents/skills)，用法见 AGENTS.md 的"技能"一节
 
 ## 目录
 
@@ -27,7 +27,7 @@
 
 每个单元的源码约定：`src/index.ts` 是后端入口，`src/client.tsx` 是前端入口；`package.json` 的 `exports` 指向 `lib/` 下的构建产物。
 
-当前状态：阶段 0 薄骨架和协同修整已验收；资料库已实现 PDF 自动导入、云端失败页段补跑、原文出处定位、混合检索和联网找权威资料，共享控件已完成并通过合成页面验收；设置页可以给各角色选模型、接其他厂商的模型服务、填密钥和查看插件。其他单元继续按旅程顺序做深。各单元的进度见 [PLAN 的单元地图和当前进度](docs/PLAN.md)，联调记录见 [验证记录](docs/stage0/compatibility.md)。
+当前状态：阶段 0 薄骨架和协同修整已验收；资料库已实现 PDF 自动导入、云端失败页段补跑、原文出处定位、混合检索和联网找权威资料，共享控件已完成并通过合成页面验收；设置页可以给各角色选模型、接其他厂商的模型服务、填密钥和查看插件。其他单元继续按旅程顺序做深。各单元的进度见 [PLAN 的单元地图和当前进度](docs/PLAN.md)，联调记录见 [验证记录](docs/history/2026-10-compatibility.md)。
 
 ## 开发
 

@@ -1,12 +1,12 @@
 # 主老师（tutor）
 
-> 代码：[`packages/tutor`](../../packages/tutor)；老师的角色提示词在 [`packages/app/cordis.patch.yml`](../../packages/app/cordis.patch.yml) · 接口：[契约](../stage0/contracts.md) §5.1、§7 和 §11"协同修整""Agent" · 调研：[做深调研](research.md)（Claude 的复核见下文） · 做法：[提示词与工具说明技能](../../.agents/skills/learning-prompts-tools/SKILL.md)
+> 代码：[`packages/tutor`](../../packages/tutor)；老师的角色提示词在 [`packages/app/cordis.patch.yml`](../../packages/app/cordis.patch.yml) · 接口：[契约](../contracts.md) §5.1、§7 和 §11"协同修整""Agent" · 调研：[做深调研](research.md)（Claude 的复核见下文） · 做法：[提示词与工具说明技能](../../.agents/skills/learning-prompts-tools/SKILL.md)
 
 主老师是你唯一的老师：开课、发布任务、决定给多少帮助、写课时小结、处理修改提案。各单元只是代码的分块方式，对你来说只有一个主老师，侧边会话是同一个老师的"课间答疑窗口"。
 
 ## 现状
 
-- **做深（10-10）：** Claude 复核调研后分三批：A 可靠接课与简报、B 课堂记录与课时收尾、C 修改提案，三批都**已技术验收，待你试用**（设计和验收标准见下文各节，验证见[验证记录](../stage0/compatibility.md#tutor-ab可靠接课与课堂记录10-10claude)和 [C 的验证](../stage0/compatibility.md#annotation-与-sidechat-的复核和-tutor-c10-10claude)）。C 和 annotation 一起做：目前提案只来自教材批注里的报错。
+- **做深（10-10）：** Claude 复核调研后分三批：A 可靠接课与简报、B 课堂记录与课时收尾、C 修改提案，三批都**已技术验收，待你试用**（设计和验收标准见下文各节，验证见[验证记录](../history/2026-10-compatibility.md#tutor-ab可靠接课与课堂记录10-10claude)和 [C 的验证](../history/2026-10-compatibility.md#annotation-与-sidechat-的复核和-tutor-c10-10claude)）。C 和 annotation 一起做：目前提案只来自教材批注里的报错。
 - **骨架：**
   - **会话：** 开课时一个会话（目标、摸底、路线、第一阶段设计），之后每个阶段一个。阶段就绪后，第一条进度通知进入新的阶段会话，老师先介绍这个阶段。新建课程后老师自动开场，不用你先说话。
   - **课程简报：** 每轮对话前，把课程现状按"下一步 → 目标 → 资料 → 路线与任务 → 教材 → 测试 → 知识节点 → 掌握状态"的顺序拼好给老师，只在内容变化时注入。
@@ -145,7 +145,7 @@ Codex 的[调研](research.md)对骨架的核对基本属实，下面这些问�
 - **做深的取舍**（10-10，Claude 复核调研后定，你授权）：见"调研复核"。
 - **修改提案只记"已改"和"不改"两种结果**（10-10，Claude）："已改"要有提案之后的改动作证据，"不改"要有给你看的理由；不另设"已接受待执行"。
 
-完整的决定和来源见[决策记录](../decisions.md)。
+完整的决定和来源见[决策记录](../history/2026-10-decisions.md)。
 
 ## 待定问题
 

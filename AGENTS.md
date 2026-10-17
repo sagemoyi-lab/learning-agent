@@ -2,11 +2,11 @@
 
 本项目由不同的 AI 助手轮流开发（Claude Code、Codex 等），用户会在额度用完时换人接续。本文件是共用的开发约定，**接手第一件事是读它**。Claude 通过 [CLAUDE.md](CLAUDE.md) 引用本文件。
 
-这些约定继承自已确认的 PLAN、接口契约和开发讨论。约定有变化时直接改本文件，并在[决策记录](docs/decisions.md)里注明。
+这些约定继承自已确认的 PLAN、接口契约和开发讨论。约定有变化时直接改本文件，并在[决策记录](docs/history/2026-10-decisions.md)里注明。
 
 ## 接手时先做这几件事
 
-1. 依次读：本文件 → [docs/PLAN.md](docs/PLAN.md)（总览，尤其"当前进度"）→ 要动的单元的设计文档 `docs/<单元>/design.md` → [docs/decisions.md](docs/decisions.md) 最后几条 → [docs/stage0/contracts.md](docs/stage0/contracts.md) → [docs/stage0/compatibility.md](docs/stage0/compatibility.md) 最后几节 → [docs/throughts.md](docs/throughts.md) 最后几条（用户最近说了什么）。
+1. 依次读：本文件 → [docs/PLAN.md](docs/PLAN.md)（总览，尤其"当前进度"）→ 要动的单元的设计文档 `docs/<单元>/design.md` → [docs/history/2026-10-decisions.md](docs/history/2026-10-decisions.md) 最后几条 → [docs/contracts.md](docs/contracts.md) → [docs/history/2026-10-compatibility.md](docs/history/2026-10-compatibility.md) 最后几节 → [docs/throughts.md](docs/throughts.md) 最后几条（用户最近说了什么）。
 2. `git status`、`git log --oneline -10`：看清哪些是已提交的、哪些是上一位留下的未提交改动。**不要覆盖或丢弃别人的未提交代码**；接手时先验收（按 `learning-handoff-review` 技能），再决定保留、修改还是提交。
 3. 跑一遍 `pnpm typecheck`、`pnpm test`、`pnpm build`，确认起点是绿的。`tests/flow.test.ts` 是最小学习流程的回归测试，必须一直通过。
 4. 查本机是否还有本项目的 DSH 进程占着端口（见下文"本地环境"），不要误杀别的进程。
@@ -88,7 +88,7 @@
   - `docs/PLAN.md` 是总览（设计原则、单元地图、技术底座、模型策略、开发路线、当前进度）；
   - `docs/<单元>/design.md` 是单元的设计文档（管什么、现状、怎么运作、关键决定、待定问题），一个单元一份：改了哪个单元，就更新哪份；
   - `docs/journey.md` 写跨单元的学习流程；
-  - `docs/decisions.md` 是决策记录，新决定按日期追加在表格末尾并注明来源。后来的决定取代、修改或了结了某一行时，在那一行的决策末尾注明是哪天的哪条，旧行其他内容不改；
+  - `docs/history/2026-10-decisions.md` 是决策记录，新决定按日期追加在表格末尾并注明来源。后来的决定取代、修改或了结了某一行时，在那一行的决策末尾注明是哪天的哪条，旧行其他内容不改；
   - `docs/history/` 是冻结的旧记录，不再修改。
 
   讨论或验收后更新对应的文档。使用清楚、易读的中文。

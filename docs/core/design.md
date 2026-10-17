@@ -1,6 +1,6 @@
 # 核心（core）
 
-> 代码：[`packages/core`](../../packages/core) · 接口：[契约](../stage0/contracts.md) §3、§4、§5.1、§6 · 验证：[验证记录](../stage0/compatibility.md) S1–S7
+> 代码：[`packages/core`](../../packages/core) · 接口：[契约](../contracts.md) §3、§4、§5.1、§6 · 验证：[验证记录](../history/2026-10-compatibility.md) S1–S7
 
 核心不管教学，只管所有单元共用的底层：数据库、课程文件的读写和变更日志、会话归属、学习证据日志、修改提案的存放，以及前端调用的接口和变更推送。
 
@@ -56,4 +56,4 @@
 - **服务名加 `learn` 前缀，事件以 `learning/` 开头，接口为 `/api/learning/<单元>.<方法>`**（10-03，契约）。
 - **接口用精确路由，不拦截 `/api`，暂不用 DSH 的类型化接口生成**（10-03，阶段 0 验证 V3）。
 
-完整的决定和来源见[决策记录](../decisions.md)。
+完整的决定和来源见[决策记录](../history/2026-10-decisions.md)。

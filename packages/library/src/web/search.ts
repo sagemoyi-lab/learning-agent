@@ -6,7 +6,7 @@ import { AUTHORITY_TEXT, formatOf, isPublicSuffix, languageOf, normalizeUrl, org
 
 export type ProviderId = 'exa' | 'bocha' | 'tavily'
 
-/** Measured on course-topic queries (compatibility.md, 10-07): Exa finds the most university sources. */
+/** Measured on course-topic queries (docs/history/2026-10-compatibility.md, 10-07): Exa finds the most university sources. */
 export const PROVIDER_ORDER: readonly ProviderId[] = ['exa', 'bocha', 'tavily']
 export const PROVIDER_NAME: Record<ProviderId, string> = { exa: 'Exa', bocha: '博查', tavily: 'Tavily' }
 export const PROVIDER_KEY: Record<ProviderId, string> = { exa: 'EXA_API_KEY', bocha: 'BOCHA_API_KEY', tavily: 'TAVILY_API_KEY' }
