@@ -4,16 +4,6 @@
 import type { Answer, AnswerInput, Grading, SingleAnswer, Verdict } from '@learning-agent/contracts'
 import { convert, math, normalizeUnit, prettyUnit, splitQuantity, unitOf } from './units.ts'
 
-/** The first number in a free-text answer (answers submitted before there was an answer box). */
-export function parseNumber(text: string): number | undefined {
-  for (const line of text.split(/\n/)) {
-    const value = splitQuantity(line).value
-    if (value !== undefined) return value
-  }
-  const match = /([-+]?\d+(?:\.\d+)?|[-+]?\.\d+)/.exec(text)
-  return match ? Number(match[1]) : undefined
-}
-
 /** Choice letters (`A`, `B、C`, `ac`) → option indices. */
 export function parseChoices(text: string): number[] {
   const letters = text.toUpperCase().match(/[A-H]/g) ?? []
@@ -117,12 +107,6 @@ export function judgeByRule(answer: SingleAnswer, final: string): Judged | undef
     return { verdict: 'correct', score: 1, rationale: '代入几组数值，和参考表达式相等' }
   }
   return undefined
-}
-
-/** One answer by rule as a grading, or undefined when it needs the model. */
-export function gradeByRule(answer: SingleAnswer, final: string): Grading | undefined {
-  const judged = judgeByRule(answer, final)
-  return judged && { ...judged, method: 'rule', confidence: 'high' }
 }
 
 /** The answer boxes of a problem: one per part. */

@@ -2,7 +2,7 @@
 // service first, then the measured order; a failing or missing service hands over to the next one.
 // Each question runs twice: limited to trusted sites, and open. Results are rated by site rules.
 import type { SiteRule, WebCandidate, WebSearch } from '@learning-agent/contracts'
-import { AUTHORITY_TEXT, formatOf, isPublicSuffix, languageOf, normalizeUrl, organization, rate, siteOf, trustedSites } from './sites.ts'
+import { formatOf, isPublicSuffix, languageOf, normalizeUrl, organization, rate, siteOf, trustedSites } from './sites.ts'
 
 export type ProviderId = 'exa' | 'bocha' | 'tavily'
 
@@ -169,8 +169,4 @@ export async function searchWeb(questions: readonly string[], providers: readonl
     return { candidates, clues }
   }))
   return { candidates: perQuestion.flatMap(entry => entry.candidates), clues: perQuestion.flatMap(entry => entry.clues), notes: [...new Set(notes)] }
-}
-
-export function describeAuthority(candidate: Pick<WebCandidate, 'authority' | 'rule'>): string {
-  return `${AUTHORITY_TEXT[candidate.authority]}（${candidate.rule}）`
 }

@@ -559,9 +559,6 @@ export function apply(ctx: ClientContext): void {
       state.switchScope({ kind: 'course', courseId: courseId as Id<'course'> })
       void refreshCourses()
     },
-    leaveCourse() {
-      if (state.scope.kind !== 'main') state.switchScope({ kind: 'main' })
-    },
     onScope(listener) {
       let last = state.scope
       return state.subscribe(() => {

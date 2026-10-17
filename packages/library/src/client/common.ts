@@ -23,11 +23,6 @@ export function isWeb(source: Source): boolean {
   return source.origin.kind === 'web'
 }
 
-/** A kept web page, read as its text rather than as pages. */
-export function isWebPage(source: Source): boolean {
-  return source.origin.kind === 'web' && source.origin.format === 'html'
-}
-
 /** The page number printed in the book, when the PDF page has one. */
 export function printedPage(source: Source, page: number): number | undefined {
   const printed = page - source.pageOffset

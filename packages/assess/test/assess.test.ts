@@ -6,30 +6,31 @@ import { newId, type Id, type NewProblem } from '@learning-agent/contracts'
 import { Database } from '../../core/src/db.ts'
 import { coreMigrations } from '../../core/src/migrations.ts'
 import { CoreStore } from '../../core/src/store.ts'
-import { gradeByRule, parseChoices, parseNumber } from '../src/grading.ts'
+import { judgeByRule, parseChoices } from '../src/grading.ts'
 import { AssessStore, assessMigrations } from '../src/store.ts'
+import { splitQuantity } from '../src/units.ts'
 
 describe('rule grading', () => {
   it('reads numbers the way learners write them', () => {
-    expect(parseNumber('724.7 mmHg')).toBe(724.7)
-    expect(parseNumber('约 3.309×10^-3 m³/s')).toBeCloseTo(3.309e-3)
-    expect(parseNumber('3.309x10^{-3}')).toBeCloseTo(3.309e-3)
-    expect(parseNumber('1.2×10⁻³')).toBeCloseTo(1.2e-3)
-    expect(parseNumber('−2.5e2')).toBe(-250)
-    expect(parseNumber('101,325 Pa')).toBe(101325)
-    expect(parseNumber('不会')).toBeUndefined()
+    expect(splitQuantity('724.7 mmHg').value).toBe(724.7)
+    expect(splitQuantity('约 3.309×10^-3 m³/s').value).toBeCloseTo(3.309e-3)
+    expect(splitQuantity('3.309x10^{-3}').value).toBeCloseTo(3.309e-3)
+    expect(splitQuantity('1.2×10⁻³').value).toBeCloseTo(1.2e-3)
+    expect(splitQuantity('−2.5e2').value).toBe(-250)
+    expect(splitQuantity('101,325 Pa').value).toBe(101325)
+    expect(splitQuantity('不会').value).toBeUndefined()
   })
 
   it('grades numeric answers within tolerance and choices exactly', () => {
     const numeric = { kind: 'numeric' as const, value: 724.7, unit: 'mmHg', tolerance: { relative: 0.02 } }
-    expect(gradeByRule(numeric, '725 mmHg')?.verdict).toBe('correct')
-    expect(gradeByRule(numeric, '700')?.verdict).toBe('incorrect')
-    expect(gradeByRule(numeric, '不会')?.verdict).toBe('incorrect')
+    expect(judgeByRule(numeric, '725 mmHg')?.verdict).toBe('correct')
+    expect(judgeByRule(numeric, '700')?.verdict).toBe('incorrect')
+    expect(judgeByRule(numeric, '不会')?.verdict).toBe('incorrect')
     expect(parseChoices('b、c')).toEqual([1, 2])
     const choice = { kind: 'choice' as const, options: ['甲', '乙', '丙'], correct: [2, 1] }
-    expect(gradeByRule(choice, 'BC')?.verdict).toBe('correct')
-    expect(gradeByRule(choice, 'B')?.verdict).toBe('incorrect')
-    expect(gradeByRule({ kind: 'open', rubric: '…' }, 'x')).toBeUndefined()
+    expect(judgeByRule(choice, 'BC')?.verdict).toBe('correct')
+    expect(judgeByRule(choice, 'B')?.verdict).toBe('incorrect')
+    expect(judgeByRule({ kind: 'open', rubric: '…' }, 'x')).toBeUndefined()
   })
 })
 

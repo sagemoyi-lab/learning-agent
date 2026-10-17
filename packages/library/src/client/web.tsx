@@ -5,8 +5,8 @@ import { Check, ExternalLink, Globe, LoaderCircle, Plus, Search as SearchIcon, S
 import type { CitedChunk, SiteRule, Source, WebAdded, WebCandidate, WebPending, WebSearch } from '@learning-agent/contracts'
 import type { LearnShell } from '@learning-agent/contracts/client'
 import { Button, Callout, Disclosure, EmptyState, ErrorText, Menu, Page, PageHeader, Section, Skeleton, Tag, TextField, useAction, useLoad, type MenuEntry } from '@learning-agent/kit/client'
+import { AUTHORITY_LABEL } from './common.ts'
 
-export const AUTHORITY_TEXT: Record<Source['authority'], string> = { '1': '一级', '2': '二级', '3': '三级', clue: '只当线索' }
 const ADDED_TONE: Record<WebAdded['status'], 'ok' | 'accent' | 'warn' | 'bad'> = { added: 'ok', importing: 'accent', pending: 'accent', rejected: 'warn', failed: 'bad' }
 
 function host(url: string): string {
@@ -74,7 +74,7 @@ function CandidateCard({ candidate, result, onAdd }: { candidate: WebCandidate; 
   return (
     <div className="la-card la-hit">
       <div className="la-hit-head">
-        <Tag tone={candidate.authority === '3' ? 'neutral' : 'accent'} title={candidate.rule}>{AUTHORITY_TEXT[candidate.authority]} · {candidate.rule}</Tag>
+        <Tag tone={candidate.authority === '3' ? 'neutral' : 'accent'} title={candidate.rule}>{AUTHORITY_LABEL[candidate.authority]} · {candidate.rule}</Tag>
         {candidate.format === 'pdf' && <Tag>PDF</Tag>}
         <span className="la-ellipsis">{candidate.site}</span>
         {day(candidate.publishedAt) && <span className="la-num">{day(candidate.publishedAt)}</span>}
@@ -167,7 +167,7 @@ function CompactCandidate({ candidate, result, onAdd }: { candidate: WebCandidat
         <Globe size={14} strokeWidth={1.75} />
         <span className="la-tree-lines">
           <span className="la-tree-title">{candidate.title}</span>
-          <span className="la-tree-sub">{AUTHORITY_TEXT[candidate.authority]} · {candidate.site}{candidate.format === 'pdf' ? ' · PDF' : ''}</span>
+          <span className="la-tree-sub">{AUTHORITY_LABEL[candidate.authority]} · {candidate.site}{candidate.format === 'pdf' ? ' · PDF' : ''}</span>
           {result && <span className={`la-tree-sub la-lib-note ${ADDED_TONE[result.status]}`}>{result.message}</span>}
           {action.error && <span className="la-tree-sub la-lib-note bad">{action.error}</span>}
         </span>
@@ -201,7 +201,7 @@ export function PendingCompact({ courseId, shell, onChange }: { courseId: string
               <Globe size={14} strokeWidth={1.75} />
               <span className="la-tree-lines">
                 <span className="la-tree-title">{item.title}</span>
-                <span className="la-tree-sub">{AUTHORITY_TEXT[item.authority]} · {item.site}{item.format === 'pdf' ? ' · PDF' : ''}</span>
+                <span className="la-tree-sub">{AUTHORITY_LABEL[item.authority]} · {item.site}{item.format === 'pdf' ? ' · PDF' : ''}</span>
               </span>
             </a>
             <Button size="sm" variant="quiet" icon={Check} aria-label="确认加入" title="确认加入（下载后可以引用）" disabled={action.busy}
@@ -231,7 +231,7 @@ export function PendingWeb({ courseId, shell }: { courseId: string; shell: Learn
         {items.map(item => (
           <div key={item.id} className="la-card la-hit">
             <div className="la-hit-head">
-              <Tag title={item.rule}>{AUTHORITY_TEXT[item.authority]} · {item.rule}</Tag>
+              <Tag title={item.rule}>{AUTHORITY_LABEL[item.authority]} · {item.rule}</Tag>
               {item.format === 'pdf' && <Tag>PDF</Tag>}
               <span className="la-ellipsis">{item.site}</span>
             </div>
@@ -263,7 +263,7 @@ export function WebPageView({ source, chunks, chunk, shell }: { source: Source; 
     <Page width="reading">
       <PageHeader eyebrow={<><Globe size={14} strokeWidth={1.75} />网页</>} title={source.title}
         description={<>保存于 {day(source.origin.fetchedAt)}{fromExa ? '，这台电脑打不开原网页，正文来自 Exa 保存的副本' : ''}。网页之后可能改动，以这里保存的为出处。</>}
-        meta={<><Tag tone={source.authority === '3' ? 'neutral' : 'accent'}>{AUTHORITY_TEXT[source.authority]}</Tag><span className="la-faint">{host(source.origin.url)}</span></>}
+        meta={<><Tag tone={source.authority === '3' ? 'neutral' : 'accent'}>{AUTHORITY_LABEL[source.authority]}</Tag><span className="la-faint">{host(source.origin.url)}</span></>}
         actions={<a className="la-btn la-btn-sm" href={source.origin.url} target="_blank" rel="noreferrer noopener"><ExternalLink size={14} strokeWidth={1.75} />原网页</a>} />
       <article className="la-web-page">
         {chunks.length === 0 && <Skeleton lines={4} />}

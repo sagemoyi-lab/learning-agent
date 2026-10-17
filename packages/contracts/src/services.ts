@@ -1,7 +1,6 @@
 // Host services of the feature units (contracts §5.1). `learnCore` lives in core.ts.
 // Units reach each other only through these interfaces (`ctx.learnGoal`, …), never by importing code.
-// Skeleton versions: each service carries just what the stage-0 minimal flow needs; units grow them
-// when they are built out. Ids are plain strings here; the zod schemas brand them where data is stored.
+// Ids are plain strings here; the zod schemas brand them where data is stored.
 import type {} from '@deepseek-ai/cordis'
 import type { Appeal, Attempt, Grading, Problem, ProblemReport, ProblemSize, ProbeNode, Recognition, ReportReason, SingleAnswer, Test, TestKind, Verdict } from './schema/assess.ts'
 import type { ExamProfileInput, FactBasis, FactSource, GoalFact, GoalFrontmatter, Lesson, ReviewChoice, ReviewResult, RoadmapRevision, SourceNeed, Stage, StageReview, Task, TestConditions } from './schema/course.ts'
@@ -116,11 +115,6 @@ export interface LearnLibrary {
    * for the source the courses use now. Unknown chunks are left out.
    */
   chunkSources(chunkIds: readonly string[]): Record<string, string>
-  /**
-   * Sources sharing a group are not independent (docs/textbook/design.md, 两个独立来源): pages of one
-   * registrable domain; an upload with its reparses and the other editions of the same title.
-   */
-  sourceGroup(sourceId: string): string
   /** Search the web for each question, rated by site rules; results are not sources until added. */
   searchWeb(questions: readonly string[], options?: { readonly signal?: AbortSignal }): Promise<WebSearch>
   /**

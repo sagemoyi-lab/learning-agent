@@ -178,8 +178,6 @@ export interface LearnShell {
   scope(): ShellScope
   /** Switch to a course's interface (its tabs and activity bar). */
   enterCourse(courseId: string): void
-  /** Back to the main interface. */
-  leaveCourse(): void
   onScope(listener: (scope: ShellScope) => void): () => void
   /** What the learner has selected on the active page (side chat and annotations read it). */
   selection(): Selection | undefined
