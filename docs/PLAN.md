@@ -59,7 +59,7 @@ Agent 当老师：和你确认目标，摸清你的知识边界，一个阶段�
 | `<单元>/research.md` | 单元的专门调研，按日期分节（[library](library/research.md)、[settings](settings/research.md)、[knowledge](knowledge/research.md)、[goal](goal/research.md)、[assess](assess/research.md)、[curriculum](curriculum/research.md)、[textbook](textbook/research.md)、[annotation](annotation/research.md)、[sidechat](sidechat/research.md)、[tutor](tutor/research.md)、[learner](learner/research.md)、[planner](planner/research.md)、[shell](shell/research.md)） |
 | [contracts.md](contracts.md) | 单元之间的契约：总规则、数据归属、服务、事件、接口 |
 | [trial.md](trial.md) | 写给你的试用清单 |
-| [development.md](development.md) | 本机构建、启动、验收、截图的做法 |
+| [development.md](development.md) | 本机构建、启动、测试、验收、截图的做法 |
 | [throughts.md](throughts.md) | 你的原话 |
 | [history/](history/) | 冻结的旧记录：决策记录、验证记录、阶段 0 的调研和进度日记、调研复核。不再修改，也不作为现状的依据 |
 

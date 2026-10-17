@@ -10,7 +10,7 @@
 - **改 `packages/` 下的代码前：** 读 [packages/AGENTS.md](packages/AGENTS.md)（插件、契约、前端、调用模型）。
 - **改单元之间的服务、事件、数据归属或接口前：** 读 [contracts.md](docs/contracts.md)。
 - **设计新功能前：** 读这个单元 `research.md` 里相关的节，再按"开发顺序"调研。
-- **启动或重启 DSH、验收、截图、测性能前：** 读 [development.md](docs/development.md)。
+- **写测试，启动或重启 DSH、验收、截图、测性能前：** 读 [development.md](docs/development.md)。
 - `docs/history/` 是冻结的旧记录：不默认读，也不作为现状的依据；要查以前的验证或决定时再搜。
 
 ## 文档：一件事一个家

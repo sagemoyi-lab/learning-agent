@@ -21,7 +21,7 @@ description: 写、改、精简或检查文档和注释时使用，包括 AGENTS
 | `docs/<单元>/research.md` | 按日期分节的调研记录，设计这个单元时读 | 现状 |
 | `docs/contracts.md` | 单元之间的总规则、数据归属、服务和事件、接口约定 | 类型的完整定义（在 `packages/contracts`）、单元内部的细节 |
 | `docs/journey.md` | 跨单元的学习流程 | 单元内的细节 |
-| `docs/development.md` | 本机构建、启动、验收、截图的做法 | 规则（放 AGENTS.md） |
+| `docs/development.md` | 本机构建、启动、测试、验收、截图的做法 | 规则（放 AGENTS.md） |
 | `docs/trial.md` | 写给用户的试用清单 | 给助手的说明 |
 | `docs/throughts.md` | 用户原话：只追加，不改写，保留原有的写法和错字 | — |
 | `docs/history/` | 冻结的旧记录：不再修改，也不作为现状的依据 | — |

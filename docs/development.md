@@ -1,6 +1,6 @@
 # 本地开发与验收
 
-怎么在本机构建、启动 DSH、验收和截图。安装和日常启动命令见 [README](../README.md)；必须遵守的规则在 [AGENTS.md](../AGENTS.md)"安全与本地环境"，这里只写做法。
+怎么在本机构建、启动 DSH、测试、验收和截图。安装和日常启动命令见 [README](../README.md)；必须遵守的规则在 [AGENTS.md](../AGENTS.md)"安全与本地环境"，这里只写做法。
 
 ## 构建与启动
 
@@ -9,7 +9,7 @@
 - 改了前端：`pnpm build` 后刷新页面。改了后端：`pnpm build` 后重启 DSH。改了 `packages/app/cordis.patch.yml` 也要重启。
 - 后台任务停止后，DSH 的 Node 进程可能还在。重启前按端口找到占用的进程，核对命令行含 `dsh … bin.js learning` 再结束它。
 - `pnpm typecheck`、`pnpm build` 和 DSH 启动会来回改写 `pnpm-lock.yaml`（去掉或加回 `.dsh-home/profiles/learning` 那一段）。
-- 本机建符号链接要管理员权限（git 的 `core.symlinks` 为 false），仓库里不用符号链接。Git Bash 会把以 `/` 开头的参数改写成 Windows 路径，需要原样传递时加 `MSYS_NO_PATHCONV=1`。
+- 本机建符号链接要管理员权限，仓库里不用符号链接。Git Bash 会把以 `/` 开头的参数改写成 Windows 路径，需要原样传递时加 `MSYS_NO_PATHCONV=1`。
 
 ## 三个端口
 
@@ -42,7 +42,13 @@
 
 ## 测试
 
-- 跨单元测试用 `tests/harness.ts`：真实的单元，加上假的 DSH 传输、会话、智能体和模型。它给 `library` 传本机解析、关闭语义检索；解析、检索和联网搜索的单元测试用假的服务地址。
+- **两层，测的东西不同：**
+  - 单元测试放在 `packages/<单元>/test/`，测规则和纯函数的边界情况，不启动别的单元；
+  - 跨单元测试放在 `tests/<单元>/<功能>.test.ts`，按功能命名、不按开发批次，从工具、页面接口或事件走到数据库和课程文件，不再逐个列边界情况。
+- `tests/` 顶层只放整个仓库的检查：最小学习流程（`flow.test.ts`）、文档、技能、包依赖、GIF 脚本。
+- 只把昂贵或不确定的部分换成假的（模型、网络、时钟、DSH），其余用真的。跨单元测试用 `tests/harness.ts`（假的只有 DSH 的传输、会话、智能体和模型），它给 `library` 传本机解析、关闭语义检索。解析、检索和联网搜索的单元测试用假的服务地址。
+- 功能改了，同一次提交改它的测试；功能删了，测试一起删。生产代码里没人调用的函数不因为有测试而留着。测试共用一份准备、接着用前面的状态时，留在同一个文件里。
+- `pnpm coverage` 列出测试从没跑到的代码：先查有没有生产调用者，没有就删，有就是缺测试。不设覆盖率门槛。
 - 合成教材夹具放在 `tests/fixtures/`，用 `node tests/fixtures/build-middle.mjs <目录>` 从可读的 `source.md` 生成结构化结果。合成 PDF 和验收脚本放在 `.scratch/`。
 - 检索基准按需运行，要 `VOYAGEAI_API_KEY`，只用合成资料：`RETRIEVAL_BENCH=1 pnpm vitest run tests/library/retrieval-bench.test.ts`。
 

@@ -3,7 +3,7 @@
 一个本地运行的个人学习工作台，基于 DeepSeek Harness（DSH，cordis 插件体系）开发。
 
 - 总体计划：[docs/PLAN.md](docs/PLAN.md)（总览、单元地图和"现在"）；每个单元的设计、现状和关键决定在 `docs/<单元>/design.md`
-- 接续开发的约定（所有接手的助手共用）：[AGENTS.md](AGENTS.md)；本机构建、启动和验收的做法：[docs/development.md](docs/development.md)
+- 接续开发的约定（所有接手的助手共用）：[AGENTS.md](AGENTS.md)；本机构建、启动、测试和验收的做法：[docs/development.md](docs/development.md)
 - 插件之间的契约：[docs/contracts.md](docs/contracts.md)
 - 要试用的地方：[docs/trial.md](docs/trial.md)
 - 开发技能（接手验收、界面审美复核等具体做法，Claude 和 Codex 共用）：[.agents/skills/](.agents/skills)，用法见 AGENTS.md 的"技能"一节
