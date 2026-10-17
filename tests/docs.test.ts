@@ -25,8 +25,6 @@ const DESIGN_SECTIONS = ['## 概要', '## 数据与接口', '## 关键决定', '
 const DESIGN_BUDGET = 10_000
 const STALE_HEADING = /^#{2,4} .*(?:[A-D] ?批|验收标准|改版)/m
 const PROGRESS = /已技术验收|技术验收|待你试用|待用户试用|待试用|已验收/
-/** Units whose design document has not been rewritten yet; empty once the restructure is done. */
-const PENDING = new Set(['shell'])
 const PROPOSAL_SECTIONS = ['## 问题', '## 方案', '## 放弃的方案', '## 验收标准', '## 风险']
 
 function units(): string[] {
@@ -72,7 +70,7 @@ describe('documentation', () => {
   })
 
   it('design documents describe the unit as it is now', () => {
-    for (const unit of units().filter(name => !PENDING.has(name))) {
+    for (const unit of units()) {
       const path = `docs/${unit}/design.md`
       const text = read(path)
       const found = positions(text, DESIGN_SECTIONS)
