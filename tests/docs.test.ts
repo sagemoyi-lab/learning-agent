@@ -14,6 +14,7 @@ const BUDGETS: Record<string, number> = {
   'packages/AGENTS.md': 3600,
   'docs/development.md': 3300,
   'docs/PLAN.md': 9800,
+  'docs/contracts.md': 11800,
 }
 
 /** PLAN's "现在" says what is in progress and what waits for the learner, nothing about what is done. */
