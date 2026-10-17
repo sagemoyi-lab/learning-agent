@@ -26,3 +26,6 @@ spikes/probe/lib/
 
 # per-machine Claude Code settings (project skills in .claude/skills are shared)
 .claude/settings.local.json
+
+# test coverage reports (pnpm coverage)
+coverage/

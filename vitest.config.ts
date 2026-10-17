@@ -15,5 +15,11 @@ export default defineConfig({
     // Tests never reach paid online services: the harness gives the library local parsing and no
     // semantic search, and parser and embedding tests use fake endpoints.
     include: ['packages/*/test/**/*.test.ts', 'tests/**/*.test.ts'],
+    // `pnpm coverage`: what the tests never run, read as candidates for deletion (docs/development.md).
+    coverage: {
+      provider: 'v8',
+      include: ['packages/*/src/**'],
+      reporter: ['text-summary', 'json-summary', 'json'],
+    },
   },
 })
