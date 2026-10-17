@@ -39,7 +39,7 @@ const signal = (type: 'signal.question' | 'signal.misconception', at: number): L
 
 const state = (entries: LogEntry[], now = t0 + 10 * DAY) => deriveState(node, entries, now)
 
-describe('evidence that counts (A)', () => {
+describe('evidence that counts', () => {
   it('starts untested and never treats wrong answers as untested', () => {
     expect(state([]).state).toBe('untested')
     expect(state([graded('incorrect', t0)]).state).toBe('not-yet')
@@ -91,7 +91,7 @@ describe('evidence that counts (A)', () => {
   })
 })
 
-describe('independent, delayed, new (B)', () => {
+describe('independent, delayed, new', () => {
   it('counts help on the problem, during the test, or on the node within a day', () => {
     const test = newId('test'), lesson = newId('lesson'), problemId = newId('problem')
     expect(state([help(t0 - HOUR), graded('correct', t0)]).state).toBe('assisted')
@@ -129,7 +129,7 @@ describe('independent, delayed, new (B)', () => {
     expect(state([graded('correct', t0)], t0 + DAY).next).toContain('以后独立做对一道没做过的题')
   })
 
-  it('says when an answer alone counts: not within a day of help (rules-2)', () => {
+  it('says when an answer alone counts: not within a day of help', () => {
     // Helped success: from a day after the latest help.
     const helped = state([help(t0), graded('correct', t0 + HOUR)], t0 + 2 * HOUR)
     expect(helped).toMatchObject({ state: 'assisted', checkFrom: iso(t0 + DAY) })
@@ -145,7 +145,7 @@ describe('independent, delayed, new (B)', () => {
     expect(state([graded('correct', t0), graded('incorrect', t0 + DAY)]).checkFrom).toBeUndefined()
   })
 
-  it('brings the check forward after a possible misconception, and a success after it settles it (rules-3)', () => {
+  it('brings the check forward after a possible misconception, and a success after it settles it', () => {
     const misconception = (at: number): LogEntry => ({ id: newId('log'), at: iso(at), type: 'signal.misconception', nodeIds: [node], context: {}, text: '以为压强和容器形状有关（原话："形状越大压强越大"）' })
     // Independent on day 0; on day 1 a side chat explains and records a possible misconception.
     const entries = [graded('correct', t0), help(t0 + DAY, { via: 'side-chat' }), misconception(t0 + DAY + HOUR)]

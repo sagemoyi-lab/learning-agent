@@ -9,7 +9,7 @@ import { EmbeddingUnavailable, type Embedder, type Ranked } from './embeddings.t
 
 /**
  * Reranker relevance under this means the material does not answer the query. Synthetic benchmark
- * (tests/retrieval-bench.test.ts, rerank-2.5): answerable queries ≥ 0.71, unanswerable ≤ 0.35.
+ * (tests/library/retrieval-bench.test.ts, rerank-2.5): answerable queries ≥ 0.71, unanswerable ≤ 0.35.
  */
 export const GAP_RELEVANCE = 0.5
 /** Weaker hits are left out: they only invite citing unrelated passages. */

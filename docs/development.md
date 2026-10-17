@@ -44,7 +44,7 @@
 
 - 跨单元测试用 `tests/harness.ts`：真实的单元，加上假的 DSH 传输、会话、智能体和模型。它给 `library` 传本机解析、关闭语义检索；解析、检索和联网搜索的单元测试用假的服务地址。
 - 合成教材夹具放在 `tests/fixtures/`，用 `node tests/fixtures/build-middle.mjs <目录>` 从可读的 `source.md` 生成结构化结果。合成 PDF 和验收脚本放在 `.scratch/`。
-- 检索基准按需运行，要 `VOYAGEAI_API_KEY`，只用合成资料：`RETRIEVAL_BENCH=1 pnpm vitest run tests/retrieval-bench.test.ts`。
+- 检索基准按需运行，要 `VOYAGEAI_API_KEY`，只用合成资料：`RETRIEVAL_BENCH=1 pnpm vitest run tests/library/retrieval-bench.test.ts`。
 
 ## 截图和演示
 
