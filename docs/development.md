@@ -1,0 +1,52 @@
+# 本地开发与验收
+
+怎么在本机构建、启动 DSH、验收和截图。安装和日常启动命令见 [README](../README.md)；必须遵守的规则在 [AGENTS.md](../AGENTS.md)"安全与本地环境"，这里只写做法。
+
+## 构建与启动
+
+- 学习数据默认在 `文档/学习库`。开发时 `.tools/dsh-env.sh` 把 `LEARNING_HOME` 设成仓库里的 `.data/`，并导出 `.env` 里的密钥。
+- DSH 要从没有 `.env` 的目录启动：它会自动读取当前目录的 `.env`，却拒绝 `.env` 里的 `DEEPSEEK_BASE_URL`（只接受启动环境传入）。所以先 `. .tools/dsh-env.sh` 把变量导出到环境，再进 `.dsh-home/work` 启动，命令见 README。
+- 改了前端：`pnpm build` 后刷新页面。改了后端：`pnpm build` 后重启 DSH。改了 `packages/app/cordis.patch.yml` 也要重启。
+- 后台任务停止后，DSH 的 Node 进程可能还在。重启前按端口找到占用的进程，核对命令行含 `dsh … bin.js learning` 再结束它。
+- `pnpm typecheck`、`pnpm build` 和 DSH 启动会来回改写 `pnpm-lock.yaml`（去掉或加回 `.dsh-home/profiles/learning` 那一段）。
+- 本机建符号链接要管理员权限（git 的 `core.symlinks` 为 false），仓库里不用符号链接。Git Bash 会把以 `/` 开头的参数改写成 Windows 路径，需要原样传递时加 `MSYS_NO_PATHCONV=1`。
+
+## 三个端口
+
+| 端口 | 用途 | 数据目录 |
+|---|---|---|
+| 3180 | 日常开发，用户试用 | `.data/` |
+| 3182 | 验收，只有合成数据 | `.scratch/smoke-data/` |
+| 3184 | 规模测量（几千个知识节点这类） | `.scratch/perf-data/` |
+
+- 3182、3184 启动前 `export LEARNING_HOME=<该目录>`。
+- 在后台启动 3182 时，把输出写进 `.scratch/dsh-3182.log`，截图工具从这里读出带 token 的地址（不打印）：
+
+  ```bash
+  . .tools/dsh-env.sh && export LEARNING_HOME="$PWD/.scratch/smoke-data" && cd .dsh-home/work && dsh learning --no-open --port 3182 > ../../.scratch/dsh-3182.log 2>&1
+  ```
+- `.scratch/smoke-data/` 各助手共用。接手时 3182 上已有本项目的 DSH 进程，先确认它的数据目录，不确定就重启。
+- 3184 不往 3182 的共享数据里灌数据，测完停掉；截图工具用 `openApp({ port: 3184 })`。
+
+## profile 和组合包
+
+- `sh scripts/dev-profile.sh` 安装 `learning` profile，链接我们的包并选中组合包 `@learning-agent/app`。已安装 profile 的 `cordis.patch.yml` 和 `package.json` 属于学习者（设置页保存的设置、组合包的选择都在里面），脚本只在缺失时用 `profile/` 里的初始文件创建，不要手工覆盖。
+- 3180 和 3182 共用 `.dsh-home/profiles/learning`（含 `cordis.patch.yml`）和 `.dsh-home/.credentials.yaml`。在 3182 上验收设置或密钥前，先把这两个文件备份到 `.scratch/`；验收完删掉加的模型服务和密钥，两个文件恢复原样，再在页面上只读核对一遍。
+- 要添加模型服务时，用 `node scripts/fake-openai.ts [端口]` 起一个本机假接口（默认 `http://127.0.0.1:16590/v1`），不花钱。它会打印每次请求的输出额度和思考参数。
+
+## 在线服务和密钥
+
+- 资料解析默认把 PDF 上传到 MinerU 云端，语义检索用 Voyage AI（`library` 的设置项 `parser`、`semanticSearch`）。本机解析用 `pnpm mineru:start`，只监听 `127.0.0.1:16580`。
+- 联网找资料用 Exa、博查、Tavily（首选服务是设置项 `searchProvider`）。
+- 密钥（`MINERU_API_KEY`、`VOYAGEAI_API_KEY`、`EXA_API_KEY`、`BOCHA_API_KEY`、`TAVILY_API_KEY`）每次使用时按名称向 DSH 的密钥服务读取：启动环境（`dsh-env.sh` 导出的 `.env`）优先，其次是设置页保存在 `.dsh-home/.credentials.yaml` 里的。
+
+## 测试
+
+- 跨单元测试用 `tests/harness.ts`：真实的单元，加上假的 DSH 传输、会话、智能体和模型。它给 `library` 传本机解析、关闭语义检索；解析、检索和联网搜索的单元测试用假的服务地址。
+- 合成教材夹具放在 `tests/fixtures/`，用 `node tests/fixtures/build-middle.mjs <目录>` 从可读的 `source.md` 生成结构化结果。合成 PDF 和验收脚本放在 `.scratch/`。
+- 检索基准按需运行，要 `VOYAGEAI_API_KEY`，只用合成资料：`RETRIEVAL_BENCH=1 pnpm vitest run tests/retrieval-bench.test.ts`。
+
+## 截图和演示
+
+- `scripts/browser.ts` 用 playwright-core 调本机 Chrome 截图，默认在浏览器里拦下写接口，只做只读验收；`scripts/gif.ts` 把截图拼成 GIF。用法见 `learning-ui-review` 和 `learning-record-gif` 技能。
+- 内置浏览器面板隐藏时（`document.hidden` 为真），PDF.js 这类依赖动画帧的渲染不会进行。这类视觉验收改用 `scripts/browser.ts` 的 headless Chrome；还是做不了，就如实写"待用户试用"。

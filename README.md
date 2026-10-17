@@ -2,10 +2,10 @@
 
 一个本地运行的个人学习工作台，基于 DeepSeek Harness（DSH，cordis 插件体系）开发。
 
-- 总体计划：[docs/PLAN.md](docs/PLAN.md)（总览和文档地图）；每个单元的设计、现状和关键决定在 `docs/<单元>/design.md`，决策记录在 [docs/history/2026-10-decisions.md](docs/history/2026-10-decisions.md)
-- 接续开发的约定（所有接手的助手共用）：[AGENTS.md](AGENTS.md)
+- 总体计划：[docs/PLAN.md](docs/PLAN.md)（总览、单元地图和"现在"）；每个单元的设计、现状和关键决定在 `docs/<单元>/design.md`
+- 接续开发的约定（所有接手的助手共用）：[AGENTS.md](AGENTS.md)；本机构建、启动和验收的做法：[docs/development.md](docs/development.md)
 - 插件之间的契约：[docs/contracts.md](docs/contracts.md)
-- 验证记录：[docs/history/2026-10-compatibility.md](docs/history/2026-10-compatibility.md)
+- 要试用的地方：[docs/trial.md](docs/trial.md)
 - 开发技能（接手验收、界面审美复核等具体做法，Claude 和 Codex 共用）：[.agents/skills/](.agents/skills)，用法见 AGENTS.md 的"技能"一节
 
 ## 目录
@@ -14,8 +14,8 @@
 |---|---|
 | `packages/contracts` | 契约包：ID、数据格式、服务/事件/插槽声明（不含业务逻辑，被打进每个单元的包里） |
 | `packages/core` | `core` 单元（后端）：数据库、课程文件、变更与证据日志、会话归属、接口和变更推送 |
-| `packages/shell` | 外壳（前端）：接管整页；左侧栏、顶栏、标签页、侧边提问、状态栏和 Ctrl K 命令面板；全部设计变量和样式（`shell.css`，浅色与深色）；`learning.*` 插槽、`ctx.learnShell` |
-| `packages/library` ～ `packages/planner` | 各功能单元的薄骨架：资料、知识、目标、测评、课程设计、教材、掌握分析、老师与侧边会话、下一步调度 |
+| `packages/shell` | 外壳（前端）：接管整页；图标栏和侧栏、标签页和前进后退、右侧栏（提问和出处）、状态栏和 Ctrl K 命令面板；全部设计变量和样式（`shell.css`，浅色与深色）；`learning.*` 插槽、`ctx.learnShell` |
+| `packages/library` ～ `packages/planner` | 各功能单元：资料、知识、目标、测评、课程设计、教材、批注、掌握分析、老师与侧边会话、下一步调度 |
 | `packages/settings` | 设置页：模型和模型服务、资料服务、外观、数据与隐私、插件清单；读写 DSH 的设置、密钥、模型和插件服务 |
 | `packages/kit` | 共用辅助代码、前端加载与操作状态、老师和侧边会话共用的聊天组件 |
 | `packages/app` | 组合包 `@learning-agent/app`：在 DSH 服务端和客户端内核之上关掉 DSH 自带界面，挂上我们的单元和 Agent 预设 |
@@ -27,7 +27,7 @@
 
 每个单元的源码约定：`src/index.ts` 是后端入口，`src/client.tsx` 是前端入口；`package.json` 的 `exports` 指向 `lib/` 下的构建产物。
 
-当前状态：阶段 0 薄骨架和协同修整已验收；资料库已实现 PDF 自动导入、云端失败页段补跑、原文出处定位、混合检索和联网找权威资料，共享控件已完成并通过合成页面验收；设置页可以给各角色选模型、接其他厂商的模型服务、填密钥和查看插件。其他单元继续按旅程顺序做深。各单元的进度见 [PLAN 的单元地图和当前进度](docs/PLAN.md)，联调记录见 [验证记录](docs/history/2026-10-compatibility.md)。
+各单元做到哪了、现在在等什么，见 [PLAN](docs/PLAN.md) 的单元地图和"现在"。
 
 ## 开发
 
@@ -43,7 +43,7 @@ pnpm build              # 构建所有包到 lib/
 sh scripts/dev-profile.sh   # 安装 learning profile（已有的不覆盖），链接我们的包并选中组合包
 ```
 
-启动（必须在没有 `.env` 的目录里启动 DSH，原因见验证记录 V0）：
+启动（必须在没有 `.env` 的目录里启动 DSH，原因见 [development.md](docs/development.md)）：
 
 ```bash
 . .tools/dsh-env.sh && cd .dsh-home/work && dsh learning --no-open --port 3180
@@ -73,7 +73,7 @@ sh scripts/dev-profile.sh   # 安装 learning profile（已有的不覆盖），
 
 解析方式在 设置 › 资料服务 里选（资料库的设置项 `parser`：`cloud` 默认，`local` 本机），下一次导入就用新的方式。
 
-本机解析用已验证的 MinerU 4.0.10，位于 `.tools/mineru`，模型须已下载（参见验证记录 V6），整本教材约 40 分钟。在仓库根目录的 PowerShell 先运行：
+本机解析用已验证的 MinerU 4.0.10，位于 `.tools/mineru`，模型须已下载，整本教材约 40 分钟。在仓库根目录的 PowerShell 先运行：
 
 ```powershell
 pnpm mineru:start
