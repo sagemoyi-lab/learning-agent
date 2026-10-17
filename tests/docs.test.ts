@@ -26,7 +26,7 @@ const DESIGN_BUDGET = 10_000
 const STALE_HEADING = /^#{2,4} .*(?:[A-D] ?批|验收标准|改版)/m
 const PROGRESS = /已技术验收|技术验收|待你试用|待用户试用|待试用|已验收/
 /** Units whose design document has not been rewritten yet; empty once the restructure is done. */
-const PENDING = new Set(['annotation', 'learner', 'planner', 'settings', 'shell', 'sidechat', 'textbook', 'tutor'])
+const PENDING = new Set(['annotation', 'learner', 'planner', 'settings', 'shell', 'sidechat', 'tutor'])
 const PROPOSAL_SECTIONS = ['## 问题', '## 方案', '## 放弃的方案', '## 验收标准', '## 风险']
 
 function units(): string[] {
