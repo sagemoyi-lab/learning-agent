@@ -12,6 +12,19 @@ const TRAILING_ID = /\s\^([0-9a-z]{6})\s*$/
 const LONE_ID = /^\^([0-9a-z]{6})\s*$/
 /** A comma between two citation links: the reader shows them as tags side by side. */
 const BETWEEN_LINKS = /(\]\((?:cite:|https?:\/\/)[^)\s]+\))\s*[、，,；;]\s*(?=\[[^\]]*\]\((?:cite:|https?:\/\/))/g
+/** A comma left after the last citation of a paragraph, or before the first after a sentence, once a link next to it was dropped. */
+const TRAILING_COMMA = /(\]\((?:cite:|https?:\/\/)[^)\s]+\))\s*[、，,；;]+\s*$/
+const LEADING_COMMA = /([。！？.!?])\s*[、，,；;]+\s*(?=\[[^\]]*\]\((?:cite:|https?:\/\/))/g
+
+/** Whether a link's label is only its site's name or address. */
+function siteName(label: string, url: string): boolean {
+  try {
+    const host = new URL(url).host.replace(/^www\./, '')
+    return [host, url].includes(label.trim().replace(/^www\./, '').replace(/\/$/, ''))
+  } catch {
+    return false
+  }
+}
 
 export interface BlockIndex {
   readonly id: string
@@ -70,13 +83,25 @@ function unwrap(draft: string): string {
   return parseFrontmatter(text).body.trim()
 }
 
-/** Headings whose blocks ask the learner questions instead of explaining. */
+/** `\(…\)` and `\[…\]`, which some replies use, as the `$…$` and `$$…$$` the reader renders and the check reads. */
+function dollarMath(text: string): string {
+  return text
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, tex: string) => `$$${tex}$$`)
+    .replace(/\\\((.+?)\\\)/g, (_, tex: string) => `$${tex.trim()}$`)
+}
+
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.、)])\s+/
+
+/** Headings whose blocks ask the learner questions instead of explaining (files written before 10-31). */
 const QUESTION_HEADING = /读完就答/
 
 export interface FinalizeOptions {
   readonly knownChunk: (id: string) => boolean
-  /** Web pages the writer was given; links to any other address are dropped. */
-  readonly knownUrl?: (url: string) => boolean
+  /**
+   * Web pages the writer was given: true keeps a link, an address puts it on that page instead (a link to
+   * the page's site); links to any other address are dropped.
+   */
+  readonly knownUrl?: (url: string) => boolean | string | undefined
   /** Chunks that `![[…]]` may copy in; without it, embeds are dropped. */
   readonly embed?: EmbedSource
   readonly newBlockId: () => string
@@ -98,7 +123,7 @@ export function finalize(draft: string, options: FinalizeOptions): { body: strin
   const out: string[] = []
   // A line holding only citations (models put them after a list or table) belongs to the block before it.
   const pieces: string[] = []
-  for (const piece of splitPieces(unwrap(draft))) {
+  for (const piece of splitPieces(dollarMath(unwrap(draft)))) {
     const citationsOnly = /\]\(cite:/.test(piece) && piece.replace(CITE, '').replace(/[\s。．.，,、;；]/g, '') === ''
     const previous = pieces.at(-1)
     if (citationsOnly && previous && !isHeading(previous) && !isDisplayMath(previous) && !EMBED_LINE.test(previous.trim())) pieces[pieces.length - 1] = `${previous.replace(TRAILING_ID, '')} ${piece.trim()}`
@@ -118,10 +143,12 @@ export function finalize(draft: string, options: FinalizeOptions): { body: strin
       return ''
     })
     piece = piece.replace(WEB_LINK, (link, label: string, url: string) => {
-      if (options.knownUrl?.(url)) return link
+      const known = options.knownUrl?.(url)
+      if (known) return typeof known === 'string' ? `[${label}](${known})` : link
       dropped.push(`网址 ${url} 不是给出的网页`)
-      return label
-    }).replace(BETWEEN_LINKS, '$1').replace(/[ \t]+$/gm, '').trim()
+      // A label that only names the site says nothing once the link is gone.
+      return siteName(label, url) ? '' : label
+    }).replace(BETWEEN_LINKS, '$1').replace(TRAILING_COMMA, '$1').replace(LEADING_COMMA, '$1').replace(/[ \t]+$/gm, '').trim()
     if (piece) out.push(`${piece} ^${idOf(piece)}`)
   }
   const box = (item: string) => out.push(`${item}\n\n^${idOf(item)}`)
@@ -140,6 +167,8 @@ export function finalize(draft: string, options: FinalizeOptions): { body: strin
     }
     for (const line of raw.split('\n')) {
       const embed = EMBED_LINE.exec(line.trim())
+      // An embed the program cannot read is left out, not shown as its markup.
+      if (!embed && /^!\[\[.*\]\]$/.test(line.trim())) { dropped.push(`嵌入 ${line.trim()} 的写法不对`); continue }
       if (!embed) { text.push(line); continue }
       flush()
       boxes(embed[1]!, embed[2]).forEach(box)
@@ -208,11 +237,11 @@ export function indexBlocks(text: string): BlockIndex[] {
 }
 
 /**
- * A point's reply as part of the lesson: under the point's own heading (none when the point is the whole
- * lesson, or the second half of a long one), headings inside it one level lower, the recall questions only
- * when they were asked for. The lesson's own title is the program's.
+ * A point's reply as part of the lesson's 知识点: under the point's own heading (none when the point is the
+ * whole lesson, or the second half of a long one), headings inside it one level lower. The lesson's own
+ * title is the program's; recall questions a writer adds anyway are left out (10-31).
  */
-export function pointText(reply: string, title: string | undefined, questions: boolean): string {
+export function pointText(reply: string, title: string | undefined): string {
   const lines = reply.trim().replace(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/, '$1').split(/\r?\n/)
   const out: string[] = []
   let skipping = false
@@ -220,17 +249,12 @@ export function pointText(reply: string, title: string | undefined, questions: b
   for (const line of lines) {
     const heading = /^(#{1,6})\s+(.*)$/.exec(line.trim())
     if (heading) {
-      if (/读完就答/.test(heading[2]!)) {
-        skipping = !questions
-        if (questions) out.push('### 读完就答')
-        opening = false
-        continue
-      }
-      skipping = false
+      skipping = /读完就答/.test(heading[2]!)
+      if (skipping) { opening = false; continue }
       // The lesson's title, and the point's own heading before any text: the program writes them.
       if (heading[1]!.length <= 2) continue
       if (opening) { opening = false; continue }
-      out.push(`${'#'.repeat(Math.max(4, heading[1]!.length))} ${heading[2]}`)
+      out.push(`${'#'.repeat(Math.max(5, heading[1]!.length))} ${heading[2]}`)
       continue
     }
     if (skipping) continue
@@ -238,7 +262,47 @@ export function pointText(reply: string, title: string | undefined, questions: b
     out.push(line)
   }
   const body = out.join('\n').trim()
-  return title ? `### ${title}\n\n${body}` : body
+  return title ? `#### ${title}\n\n${body}` : body
+}
+
+/** A paragraph of 本节概念: `**name**：` and its explanation. */
+const CONCEPT = /^\*\*([^*\n]+)\*\*[：:]/
+
+/** The paragraphs of 本节概念 in a lesson, by block id, with the concept each explains. */
+export function conceptBlocks(text: string): Map<string, string> {
+  const out = new Map<string, string>()
+  let inside = false
+  for (const piece of splitPieces(parseFrontmatter(text).body)) {
+    if (isHeading(piece)) { inside = /^#{1,6}\s+本节概念/.test(piece); continue }
+    const [block] = inside ? indexBlocks(piece) : []
+    const name = block ? CONCEPT.exec(block.text)?.[1] : undefined
+    if (block && name) out.set(block.id, name.trim())
+  }
+  return out
+}
+
+/** A rewritten concept paragraph kept as one paragraph of `**name**：…`, without source text copied in. */
+export function asConcept(name: string, text: string): string {
+  const own = splitPieces(unwrap(text)).filter(piece => !isHeading(piece) && !isOriginal(piece) && !EMBED_LINE.test(piece.trim()))
+  const joined = own.map(piece => piece.replace(EMBED_ANYWHERE, '').trim()).join('')
+  return CONCEPT.test(joined) ? joined : `**${name}**：${joined}`
+}
+
+/**
+ * 本节概念 from its writer's reply: one paragraph per concept (a list the writer made anyway is taken apart),
+ * then the program's note of the concepts the material does not explain.
+ */
+export function conceptsText(reply: string, missing: readonly string[]): string {
+  const entries = splitPieces(unwrap(reply)).filter(piece => !isHeading(piece)).flatMap(piece => {
+    const items: string[][] = []
+    for (const line of piece.split('\n')) {
+      if (LIST_ITEM.test(line) || items.length === 0) items.push([line.replace(LIST_ITEM, '')])
+      else items.at(-1)!.push(line.trim())
+    }
+    return items.map(item => item.join('\n').trim()).filter(Boolean)
+  })
+  const note = missing.length ? [`> [!note] 资料里没有讲到：${missing.join('；')}。可以问主老师，或在资料库里加一份讲它的资料。`] : []
+  return ['### 本节概念', ...entries, ...note].join('\n\n')
 }
 
 /** Rough prompt cost of a chunk: its text plus the id and citation label written before it. */

@@ -10,7 +10,7 @@ import { afterEach, expect, it } from 'vitest'
 import type { Lesson, WebCandidate } from '@learning-agent/contracts'
 import * as textbookTools from '../../packages/textbook/src/tools.ts'
 import { FIXTURES, createHarness, textbookSettled, type Harness, type ModelCall } from '../harness.ts'
-import { checkOk, isCheck, isPlan, isWriter, materialOf, planBySubsection, textbookReply, titleOf, writePoint } from './fakes.ts'
+import { checkOk, isCheck, isConcepts, isPlan, isReviser, isWriter, materialOf, outline, planBySubsection, textbookReply, titleOf, writeConcepts, writePoint } from './fakes.ts'
 
 const meta = { actor: 'teacher' as const, reason: '教材 D 测试（合成）' }
 const WEB = { url: 'https://hg.example.edu.cn/notes/incline', title: '倾斜液柱压差计（合成网页）' }
@@ -196,6 +196,88 @@ it('quotes a web page by its address for what no material explains, without addi
   expect(h!.ctx.learnTextbook.status(lesson.id)).toMatchObject({ check: { notes: expect.arrayContaining([`联网补充：《${WEB.title}》（${WEB.url}）`]) } })
   const paragraph = await blockOf(course.id, lesson, '倾斜放置让读数变大')
   expect(await h!.endpoint<Info>('textbook', 'blockInfo', { courseId: course.id, blockId: paragraph.id })).toMatchObject({ web: [{ url: WEB.url, title: WEB.title, passage: expect.stringContaining('倾斜液柱压差计') }] })
+})
+
+it('explains a concept the material lacks from the course\'s other material, and names one found nowhere', async () => {
+  const { course, lesson } = await setUp(call => {
+    if (isPlan(call)) {
+      const first = outline(call).find(line => line.kind === '正文')!
+      return planBySubsection(call, [], [{ name: '压强', chunk: first.n }, { name: '两点压强差', chunk: 0 }, { name: '扩大室', chunk: 0 }])
+    }
+    if (isConcepts(call)) {
+      const other = /# 补充资料[^\n]*\n\[(ck_[0-9A-Z]{26})\]/.exec(call.prompt)![1]
+      return `${writeConcepts(call)}\n\n**两点压强差**：高度差为 h 的两点之间的压强差。[合成参考书 p.1](cite:${other})`
+    }
+    return usual(call)
+  }, { reference: true })
+  expect(await generate(lesson)).toBe('ready')
+  const concepts = h!.calls.find(isConcepts)!
+  expect(concepts.prompt).toMatch(/1\. 压强（见 ck_\w+）\n2\. 两点压强差（本节资料没讲，见补充资料或网页摘录）\n\n/)
+  expect(concepts.prompt.split('# 补充资料')[1]).toContain('深度相差 h 的两点压强差等于 ρgh')
+  const text = (await h!.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text
+  const opening = text.split('### 本节概念')[1]!.split('### 知识点')[0]!
+  expect(opening).toContain('**两点压强差**：高度差为 h 的两点之间的压强差。[合成参考书 p.1](cite:')
+  expect(opening).toContain('> [!note] 资料里没有讲到：扩大室。')
+  expect(h!.ctx.learnTextbook.status(lesson.id)).toMatchObject({ missing: ['扩大室'], unverified: 0 })
+})
+
+it('keeps formulas as the source writes them and says copied paragraphs again in other words, once, before publishing', async () => {
+  let formula = ''
+  const { course, lesson } = await setUp(call => {
+    if (isReviser(call)) {
+      const targets = [...call.prompt.split('# 要改的段落\n')[1]!.split('\n\n# ')[0]!.matchAll(/\[\[段落 ([0-9a-z]{6})\]\]\n(.*)/g)]
+      return targets.map(([, id, text]) => `[[段落 ${id}]]\n${text!.includes('移项') ? `点 1 的压强可以由基本方程倒过来求，式子仍按原文：\n\n![[${formula}]]` : '三个条件缺一不可：静止、同一种流体连通、密度处处一样。'}`).join('\n\n')
+    }
+    if (!isWriter(call) || titleOf(call) !== '静力学基本方程') return usual(call)
+    const material = materialOf(call)
+    formula = material.find(chunk => chunk.kind === '公式')!.id
+    const cite = material.find(chunk => chunk.kind === '正文')!.id
+    return [
+      '### 静力学基本方程',
+      `![[${formula}]]`,
+      // Rearranged: not the formula the source writes.
+      `把基本方程移项，得到 $p_1 = p_2 - \\rho g h$。[合成资料 p.2](cite:${cite})`,
+      // Copied from the source word for word.
+      `基本方程成立需要三个条件：流体静止；两点之间由同一种流体连通；流体密度不随位置变化。[合成资料 p.2](cite:${cite})`,
+      // As the source writes it, in other words: left alone.
+      `深度每增加一段，压强按 $p_2 = p_1 + \\rho g h$ 跟着增加。[合成资料 p.2](cite:${cite})`,
+    ].join('\n\n')
+  })
+  expect(await generate(lesson)).toBe('ready')
+  const [reviser, ...more] = h!.calls.filter(isReviser)
+  expect(more).toEqual([])
+  expect(reviser!.prompt).toContain('式子 $p_1 = p_2 - \\rho g h$ 和资料里的写法不一致，公式要和原文一样')
+  expect(reviser!.prompt).toContain('几乎照抄了资料原文：「基本方程成立需要三个条件')
+  // Only as context next to a target, not to rewrite.
+  expect(reviser!.prompt.split('# 要改的段落')[1]!.split('# 前后文')[0]).not.toContain('深度每增加一段')
+  const text = (await h!.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text
+  expect(text).not.toContain('p_1 = p_2 -')
+  expect(text).not.toContain('基本方程成立需要三个条件')
+  expect(text).toContain('三个条件缺一不可')
+  expect(text).toContain('深度每增加一段')
+  expect(h!.ctx.learnTextbook.status(lesson.id)).toMatchObject({ state: 'ready', unverified: 0 })
+})
+
+it('keeps a concept one paragraph under its name when a copied explanation is rewritten', async () => {
+  const { course, lesson } = await setUp(call => {
+    if (isPlan(call)) return planBySubsection(call, [], [{ name: '绝对压强', chunk: outline(call).find(item => item.text.startsWith('以绝对真空为零点'))!.n }])
+    // Word for word from the source.
+    if (isConcepts(call)) return `**绝对压强**：以绝对真空为零点量出的压强叫绝对压强；以当地大气压为零点量出的压强叫表压强。[合成资料 p.1](cite:${/（见 (ck_\w+)）/.exec(call.prompt)![1]})`
+    // Without the name, split in two, with source text copied in.
+    if (isReviser(call)) {
+      const id = /\[\[段落 ([0-9a-z]{6})\]\]\n\*\*绝对压强\*\*/.exec(call.prompt)![1]
+      const chunk = /\[(ck_\w+)\] [^\n]*\n\$\$/.exec(call.prompt)?.[1]
+      return `[[段落 ${id}]]\n它从绝对真空量起，\n\n${chunk ? `![[${chunk}]]\n\n` : ''}和从大气压量起的表压强不同。`
+    }
+    return usual(call)
+  })
+  expect(await generate(lesson)).toBe('ready')
+  const reviser = h!.calls.find(isReviser)!
+  expect(reviser.prompt).toMatch(/是"本节概念"的段落：仍写成一段"\*\*概念名\*\*：解释"/)
+  const text = (await h!.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text
+  const opening = text.split('### 本节概念')[1]!.split('### 知识点')[0]!
+  // One paragraph under its name; the check gives it back its source.
+  expect(opening.trim()).toMatch(/^\*\*绝对压强\*\*：它从绝对真空量起，和从大气压量起的表压强不同。 \[[^\]]+\]\(cite:ck_\w+\) \^[0-9a-z]{6}$/)
 })
 
 it('says where the material lacks what the exercises need, and tells the teacher', async () => {

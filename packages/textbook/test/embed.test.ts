@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CitedChunk } from '@learning-agent/contracts'
-import { expandEmbed, isOriginal } from '../src/embed.ts'
+import { EMBED_LINE, expandEmbed, isOriginal } from '../src/embed.ts'
 
 let n = 0
 const id = () => `ck_01K6PQZRB8M3A4T5V6W7X8Y${String(n++).padStart(3, '0')}`
@@ -40,6 +40,12 @@ describe('source text copied in', () => {
     })
     // A solution named on its own is folded too.
     expect(expandEmbed(solution.id, undefined, { order, extra: [] })).toMatchObject({ boxes: [expect.stringMatching(/^> \[!quote\]- 原书解答/)] })
+  })
+
+  it('reads a range whose last id is cut to the end that differs, as a writer may write it', () => {
+    const line = `![[${example.id}..${step.id.slice(-3)}]]`
+    const [, from, last] = EMBED_LINE.exec(line)!
+    expect(expandEmbed(from!, last, { order, extra: [] })).toEqual(expandEmbed(example.id, step.id, { order, extra: [] }))
   })
 
   it('does not copy in prose the explanation retells, except a worked solution', () => {

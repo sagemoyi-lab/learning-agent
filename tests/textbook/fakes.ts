@@ -1,15 +1,13 @@
-// A fake model for textbook generation (docs/textbook/design.md, 讲解与原文): it reads the prompts the way
-// the real one would — the plan's numbered outline, the writer's material list, the check's paragraphs —
-// and answers in the formats the program asks for. Tests override one call kind at a time.
+// A fake model for textbook generation (docs/textbook/design.md, 一节教材): it reads the prompts the way
+// the real one would — the plan's numbered outline, the concept list, the writer's material list, the
+// check's paragraphs — and answers in the formats the program asks for. Tests override one call kind at a time.
 import type { ModelCall } from '../harness.ts'
 
 export const isPlan = (call: ModelCall) => call.purpose === 'learning-textbook-plan'
+export const isConcepts = (call: ModelCall) => call.purpose === 'learning-textbook-concepts'
 export const isWriter = (call: ModelCall) => call.purpose === 'learning-textbook' && call.system.startsWith('你为一位具体的学习者写')
-export const isQuestions = (call: ModelCall) => call.purpose === 'learning-textbook' && call.system.startsWith('你为一节教材写')
 export const isReviser = (call: ModelCall) => call.purpose === 'learning-textbook' && call.system.startsWith('你修改一节教材')
 export const isCheck = (call: ModelCall) => call.purpose === 'learning-textbook-check'
-
-export const QUESTIONS = '### 读完就答\n\n1. 表压强和绝对压强差在哪里？\n2. 等压面要满足哪些条件？'
 
 /** The plan prompt's outline: `[n] kind · text`. */
 export function outline(call: ModelCall): { readonly n: number; readonly kind: string; readonly text: string }[] {
@@ -17,9 +15,15 @@ export function outline(call: ModelCall): { readonly n: number; readonly kind: s
   return [...part.matchAll(/^\[(\d+)\] (\S+) · (.*)$/gm)].map(match => ({ n: Number(match[1]), kind: match[2]!, text: match[3]! }))
 }
 
-/** A plan with one point per subsection heading, and the needs given. */
-export function planBySubsection(call: ModelCall, needs: readonly { text: string; point: number; covered: boolean }[] = []): string {
+type Concepts = readonly { name: string; chunk: number }[]
+
+/**
+ * A plan with one point per subsection heading, the needs given, and the concepts given (by default 压强,
+ * at the first text chunk).
+ */
+export function planBySubsection(call: ModelCall, needs: readonly { text: string; point: number; covered: boolean }[] = [], concepts?: Concepts): string {
   const lines = outline(call)
+  const first = lines.find(line => line.kind === '正文')
   const starts = lines.filter(line => line.kind === '小标题' && /^\d+\.\d+\.\d+/.test(line.text))
   const points = starts.map((line, index) => ({
     title: line.text.replace(/^[\d.]+\s*/, '').replace(/（合成）$/, ''),
@@ -27,7 +31,12 @@ export function planBySubsection(call: ModelCall, needs: readonly { text: string
     from: line.n,
     to: (starts[index + 1]?.n ?? lines.length + 1) - 1,
   }))
-  return JSON.stringify({ points, needs })
+  return JSON.stringify({ concepts: concepts ?? (first ? [{ name: '压强', chunk: first.n }] : []), points, needs })
+}
+
+/** 本节概念: each listed concept in its own words, citing the chunk it is explained at. */
+export function writeConcepts(call: ModelCall, words = '用自己的话说清它是什么'): string {
+  return [...call.prompt.matchAll(/^\d+\. (.+?)（见 (ck_[0-9A-Z]{26})）$/gm)].map(match => `**${match[1]}**：${words}。[合成资料 p.1](cite:${match[2]})`).join('\n\n')
 }
 
 /** The chunks a writer prompt lists, in order: its own material, then the supplementary one. */
@@ -40,10 +49,7 @@ export function titleOf(call: ModelCall): string {
   return /# 这次写：(.+)/.exec(call.prompt)![1]!
 }
 
-/**
- * A writer reply: the point's heading, a paragraph in its own words citing the first text chunk, and the first
- * formula embedded; a lesson of one point also writes its recall questions.
- */
+/** A writer reply: the point's heading, a paragraph in its own words citing the first text chunk, and the first formula embedded. */
 export function writePoint(call: ModelCall, words = '这一点用自己的话讲'): string {
   const material = materialOf(call)
   const text = material.find(chunk => chunk.kind === '正文') ?? material[0]!
@@ -53,7 +59,6 @@ export function writePoint(call: ModelCall, words = '这一点用自己的话讲
     call.prompt.includes('不要写标题') || single ? '' : `### ${titleOf(call)}`,
     `${words}。[合成资料 p.1](cite:${text.id})`,
     formula ? `![[${formula.id}]]` : '',
-    single ? QUESTIONS : '',
   ].filter(Boolean).join('\n\n')
 }
 
@@ -69,11 +74,11 @@ export function checkOk(call: ModelCall, verdict: (text: string) => { verdict: s
   return JSON.stringify({ results: paragraphsOf(call).map(paragraph => ({ id: paragraph.id, sources: first ? [first] : [], note: '', ...verdict(paragraph.text) })) })
 }
 
-/** The usual fake: plan by subsection, write each point, ask the questions, check everything as fine. */
+/** The usual fake: plan by subsection, write the concepts and each point, check everything as fine. */
 export function textbookReply(call: ModelCall): string | undefined {
   if (isPlan(call)) return planBySubsection(call)
+  if (isConcepts(call)) return writeConcepts(call)
   if (isWriter(call)) return writePoint(call)
-  if (isQuestions(call)) return QUESTIONS
   if (isCheck(call)) return checkOk(call)
   return undefined
 }

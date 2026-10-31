@@ -15,7 +15,7 @@ let citation = ''
 
 beforeAll(() => {
   h = createHarness(call => {
-    if (call.purpose === 'learning-textbook') return `## 1.1 静水压强\n\n静水压强按 $p=\\rho g h$ 计算。[合成资料 p.1](cite:${citation})\n\n### 读完就答\n\n1. 水深加倍时，静水压强怎样变化？`
+    if (call.purpose === 'learning-textbook') return `## 1.1 静水压强\n\n静水压强按水的深度计算。[合成资料 p.1](cite:${citation})`
     if (call.purpose === 'learning-sidechat-summary') {
       return JSON.stringify({ questions: [{ quote: '水深加倍时会怎样', text: '水深加倍时会怎样？', nodes: ['N1'] }], conclusions: [{ text: '静水压强加倍。', from: 2 }], misconceptions: [], help: [{ reply: 2, level: 'explanation', nodes: ['N1'] }] })
     }

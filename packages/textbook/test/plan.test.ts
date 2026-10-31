@@ -13,7 +13,7 @@ const material = [
   chunk('heading', '1.2.3 等压面'), chunk('text', '同一水平面上压强相等的面叫等压面，列方程时最常用。'),
 ]
 const stems = ['1-6 敞口水槽中水深 3 m，取大气压 100 kPa，求槽底的表压强。']
-const ranges = (points: ReturnType<typeof readPlan>) => points!.map(point => [point.title, material.indexOf(point.chunks[0]!) + 1, material.indexOf(point.chunks.at(-1)!) + 1])
+const ranges = (plan: ReturnType<typeof readPlan>) => plan!.points.map(point => [point.title, material.indexOf(point.chunks[0]!) + 1, material.indexOf(point.chunks.at(-1)!) + 1])
 
 describe('the points of a lesson', () => {
   it('outlines the material by number, kind and first words', () => {
@@ -40,21 +40,40 @@ describe('the points of a lesson', () => {
         { text: '', point: 1 },
       ],
     }
-    const points = readPlan(plan, material, stems)!
+    const { points } = readPlan(plan, material, stems)!
     expect(points.map(point => point.needs)).toEqual([[], [{ text: '表压和绝压的换算', covered: true }, { text: '扩大室的作用', covered: false }]])
     expect(copiesStem('水深 3 m，取大气压 100 kPa 时', stems)).toBe(true)
     expect(copiesStem('静力学基本方程的适用条件', stems)).toBe(false)
   })
 
+  it('lists the concepts in reading order, finding one whose number is wrong by its name', () => {
+    const plan = {
+      points: [{ title: '全节', from: 1, to: 11 }],
+      concepts: [
+        { name: '等压面', chunk: 11 },
+        { name: '**压强**', chunk: 1 },
+        { name: '基本方程', chunk: 40 },
+        { name: '扩大室', chunk: 0 },
+        { name: '压强', chunk: 2 },
+        { name: '敞口水槽中水深 3 m，取大气压', chunk: 6 },
+        { name: '甲' },
+      ],
+    }
+    const { concepts } = readPlan(plan, material, stems)!
+    // 压强 names a heading: the text under it. 基本方程 is found by name (not in its heading); 扩大室 is in no chunk.
+    expect(concepts.map(concept => [concept.name, concept.chunk ? material.indexOf(concept.chunk) + 1 : 0])).toEqual([['压强', 2], ['基本方程', 9], ['等压面', 11], ['扩大室', 0]])
+    expect(readPlan({ points: plan.points }, material, stems)!.concepts).toEqual([])
+  })
+
   it('merges the smallest neighbours past 8 points, and splits a point too long for one reply', () => {
     const sizes = [50, 5, 5, 50, 50, 5, 5, 50, 50, 50]
     const short = sizes.map(size => chunk('text', '甲'.repeat(size)))
-    const many = readPlan({ points: short.map((_, index) => ({ title: `第${index + 1}点`, from: index + 1, to: index + 1 })) }, short, [])!
+    const many = readPlan({ points: short.map((_, index) => ({ title: `第${index + 1}点`, from: index + 1, to: index + 1 })) }, short, [])!.points
     expect(many.map(point => point.title)).toEqual(['第1点', '第2点', '第4点', '第5点', '第6点', '第8点', '第9点', '第10点'])
     expect(many.flatMap(point => point.chunks)).toEqual(short)
 
     const long = [chunk('heading', '1.2.1 甲'), chunk('text', '甲'.repeat(4000)), chunk('text', '乙'.repeat(4000)), chunk('heading', '1.2.2 乙'), chunk('text', '丙'.repeat(4000)), chunk('text', '丁'.repeat(4000))]
-    const parts = readPlan({ points: [{ title: '全节', from: 1, to: 6 }] }, long, [])!
+    const parts = readPlan({ points: [{ title: '全节', from: 1, to: 6 }] }, long, [])!.points
     expect(parts.length).toBeGreaterThan(1)
     expect(parts.map(point => point.title)).toEqual(['全节', ...parts.slice(1).map(() => '全节（续）')])
     expect(parts.flatMap(point => point.chunks)).toEqual(long)

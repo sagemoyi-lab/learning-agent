@@ -1,6 +1,7 @@
 // The check of a lesson's explanation (docs/textbook/design.md, 讲解与原文): source text copied in as it is
 // needs none; each explanation paragraph is checked against the material of its point. The program tests
-// what it can by rule (numbers, words copied from an exercise); a check model judges whether a paragraph
+// what it can by rule (formulas as the source writes them, numbers, words copied from an exercise or from
+// the material); a check model judges whether a paragraph
 // contradicts the material or adds facts it does not have, and names the chunks it comes from. Pure helpers:
 // the model and library calls are in checker.ts.
 import { parseFrontmatter } from '@learning-agent/contracts'
@@ -39,15 +40,20 @@ export interface CheckChunk {
 const CITE = /\[([^\]]*)\]\(cite:([^)\s]+)\)/g
 const WEB_LINK = /\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g
 const isHeading = (piece: string) => /^#{1,6}\s/.test(piece)
+/** The program's note box: what the material does not explain. */
+const NOTE = /^>\s*\[!note\]/
 
-/** The explanation paragraphs of a text: not headings, quote boxes of source text, or recall questions. */
+/**
+ * The explanation paragraphs of a text: not headings, quote boxes of source text, the program's notes of
+ * what the material does not explain, or the recall questions of older files.
+ */
 export function paragraphsOf(body: string, only?: ReadonlySet<string>): Paragraph[] {
   const out: Paragraph[] = []
   let questions = false
   for (const piece of splitPieces(parseFrontmatter(body).body)) {
     if (isHeading(piece)) { questions = /读完就答/.test(piece); continue }
     const [block] = indexBlocks(piece)
-    if (!block || questions || block.original || (only && !only.has(block.id))) continue
+    if (!block || questions || block.original || NOTE.test(block.text) || (only && !only.has(block.id))) continue
     const text = block.text.replace(CITE, '').replace(WEB_LINK, '$1').trim()
     if ([...text.replace(/[\s。！？；，、：:.,;-]/g, '')].length < 4) continue
     out.push({ id: `P${out.length + 1}`, blockId: block.id, text, citations: block.citations })
@@ -77,9 +83,20 @@ export function numbersIn(text: string): string[] {
   return [...new Set((plain.match(/\d+(?:\.\d+)?/g) ?? []).filter(number => number.includes('.') || number.length >= 2))]
 }
 
-/** LaTeX without its markup, so `p_{2}=p_{1}+\rho gh` and MinerU's `p _ {2} = p _ {1} + \rho g h` compare equal. */
+const SYMBOLS: Record<string, string> = {
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η', theta: 'θ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ',
+  pi: 'π', rho: 'ρ', sigma: 'σ', tau: 'τ', phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+  le: '≤', leq: '≤', leqslant: '≤', ge: '≥', geq: '≥', geqslant: '≥', ne: '≠', neq: '≠', approx: '≈', times: '×', cdot: '·',
+}
+
+/**
+ * LaTeX without its markup, so `p_{2}=p_{1}+\rho gh`, MinerU's `p _ {2} = p _ {1} + \rho g h` and a text
+ * chunk's `p2=p1+ρgh` compare equal.
+ */
 export function bareTex(text: string): string {
-  return normalized(text)
+  // Symbols first: `\rho g` loses the space that ends the command once whitespace goes.
+  return normalized(text.replace(/\\([A-Za-z]+)/g, (command, name: string) => SYMBOLS[name] ?? command))
     .replace(/\\tag\{[^}]*\}/g, '')
     .replace(/\\(?:mathrm|text|rm|mathbf|operatorname|boldsymbol)\{([^}]*)\}/g, '$1')
     .replace(/\\(?:left|right|displaystyle|,|;|!|quad|qquad)/g, '')
@@ -87,40 +104,68 @@ export function bareTex(text: string): string {
     .replace(/[$^_{}~]/g, '')
 }
 
-/** Formulas a paragraph states (inline or display math with `=`), as written. */
+/** Formulas a paragraph states (inline or display math with `=` or an inequality), as written. */
 export function formulasIn(text: string): string[] {
-  return [...text.matchAll(/\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g)].map(match => (match[1] ?? match[2]!).trim()).filter(formula => /=|<|>|\\approx/.test(formula))
+  return [...text.matchAll(/\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g)].map(match => (match[1] ?? match[2]!).trim()).filter(formula => /=|<|>|\\(?:approx|le|ge|ne)/.test(formula))
+}
+
+/** What the program finds wrong with a paragraph by rule; `contradicts` when it is at odds with the material. */
+export interface Problem {
+  readonly note: string
+  readonly contradicts: boolean
 }
 
 /**
- * What the program finds wrong with a paragraph by rule, given its point's material: numbers the material
- * does not have, or a stretch copied from an exercise. Formulas are only reported (`unknown`): a rearranged
- * formula is fine, so the check model judges them.
+ * What the program finds wrong with a paragraph by rule, given its point's material: a stretch copied from an
+ * exercise, a formula the material does not have as written (formulas stay as the source writes them, 10-31),
+ * or numbers the material does not have.
  */
-export function precheck(text: string, material: string, stems: readonly string[]): { readonly problem?: string; readonly unknown: readonly string[] } {
+export function precheck(text: string, material: string, stems: readonly string[]): Problem | undefined {
+  if (copiesStem(text, stems, 14)) return { note: '和课后习题的题干文字相同，可能把题目写进了教材', contradicts: false }
+  const bare = bareTex(material)
+  const changed = formulasIn(text).filter(formula => !bare.includes(bareTex(formula)))
+  if (changed.length) return { note: `式子 ${changed.slice(0, 2).map(formula => `$${formula}$`).join('、')} 和资料里的写法不一致，公式要和原文一样`, contradicts: true }
   const own = normalized(material)
   const missing = numbersIn(text).filter(number => !own.includes(number))
-  const bare = bareTex(material)
-  const unknown = formulasIn(text).filter(formula => !bare.includes(bareTex(formula)))
-  if (copiesStem(text, stems, 14)) return { problem: '和课后习题的题干文字相同，可能把题目写进了教材', unknown }
-  if (missing.length) return { problem: `数值 ${missing.join('、')} 在资料里找不到`, unknown }
-  return { unknown }
+  if (missing.length) return { note: `数值 ${missing.join('、')} 在资料里找不到`, contradicts: false }
+  return undefined
+}
+
+/** Characters in a row a paragraph may share with its material before it reads as copied. */
+export const COPY_RUN = 20
+
+/** What copying is judged on: the words, without math, links, markup or punctuation. */
+const wordsOf = (text: string) => text
+  .replace(CITE, '').replace(WEB_LINK, '$1')
+  .replace(/\$\$[\s\S]*?\$\$|\$[^$\n]*\$/g, '')
+  .replace(/[\s*_>#[\]()（）。，、；：！？“”‘’"',.;:!?-]/g, '')
+
+/**
+ * Whether a paragraph repeats `run` characters of `material` in a row (10-31: the explanation is in other
+ * words; the source is one click away). Built once per material.
+ */
+export function copiesOf(material: string, run = COPY_RUN): (text: string) => boolean {
+  const source = [...wordsOf(material)]
+  const windows = new Set<string>()
+  for (let i = 0; i + run <= source.length; i += 1) windows.add(source.slice(i, i + run).join(''))
+  return text => {
+    const own = [...wordsOf(text)]
+    for (let i = 0; i + run <= own.length; i += 1) if (windows.has(own.slice(i, i + run).join(''))) return true
+    return false
+  }
 }
 
 export const CHECK_SYSTEM = `你核对一节教材里的讲解段落是否忠实于给出的资料。讲解可以换说法、举资料里有的例子、省略细节，但不能和资料矛盾，也不能加入资料里没有的事实（数值、公式、结论、适用条件）。教学性的过渡、提问、学习建议、解题思路和步骤安排、常见错误的提醒不算事实，只要它们用到的事实都在资料里。资料是唯一依据，不要用你自己的知识判断对错。
 对每段给出：
-- verdict：ok（没有矛盾，事实都能在资料里找到，包括由资料里的式子直接变形得到的式子）；contradicted（和资料说的相反，或条件、数值、符号、单位不同）；unsupported（有资料里找不到的事实）。
+- verdict：ok（没有矛盾，事实都能在资料里找到）；contradicted（和资料说的相反，或条件、数值、符号、单位不同）；unsupported（有资料里找不到的事实）。
 - sources：这段内容出自哪些片段，写片段 ID（最多 3 个）；网页摘录写它的网址。
 - note：不是 ok 时，用一句话说明哪里不对、资料原文怎么说。
 只输出 JSON：{"results":[{"id":"P1","verdict":"ok","sources":["ck_…"],"note":""}]}`
 
-/** The material of one point and its explanation paragraphs; formulas the program did not find are named. */
-export function checkPrompt(paragraphs: readonly Paragraph[], chunks: readonly CheckChunk[], unknown: ReadonlyMap<string, readonly string[]>): string {
+/** The material of one point and its explanation paragraphs. */
+export function checkPrompt(paragraphs: readonly Paragraph[], chunks: readonly CheckChunk[]): string {
   const material = chunks.map(chunk => `[${chunk.id}] ${chunk.citation}\n${chunk.text}`).join('\n\n')
-  const lines = paragraphs.map(paragraph => {
-    const formulas = unknown.get(paragraph.id) ?? []
-    return [`[${paragraph.id}] ${paragraph.text}`, ...formulas.length ? [`（资料里没有原样出现的式子：${formulas.map(formula => `$${formula}$`).join('、')}，请判断能否由资料直接得出）`] : []].join('\n')
-  }).join('\n\n')
+  const lines = paragraphs.map(paragraph => `[${paragraph.id}] ${paragraph.text}`).join('\n\n')
   return `# 资料\n${material || '（没有）'}\n\n# 要核对的讲解段落\n${lines}`
 }
 
@@ -130,7 +175,7 @@ const VERDICTS = new Set(['ok', 'contradicted', 'unsupported'])
  * Turn a check reply into judgments, by block id. A paragraph the reply leaves out is `unchecked`; sources
  * outside `allowed` are dropped; a problem the program found stands whatever the reply says.
  */
-export function judge(paragraphs: readonly Paragraph[], reply: unknown, allowed: ReadonlySet<string>, found: ReadonlyMap<string, string>): Map<string, ParagraphCheck> {
+export function judge(paragraphs: readonly Paragraph[], reply: unknown, allowed: ReadonlySet<string>, found: ReadonlyMap<string, Problem>): Map<string, ParagraphCheck> {
   type Raw = { readonly id?: unknown; readonly verdict?: unknown; readonly sources?: unknown; readonly note?: unknown }
   const raw = new Map<string, Raw>()
   const list = (reply as { results?: unknown })?.results
@@ -142,7 +187,7 @@ export function judge(paragraphs: readonly Paragraph[], reply: unknown, allowed:
     const sources = Array.isArray(item?.sources) ? [...new Set((item.sources as unknown[]).filter((id): id is string => typeof id === 'string').map(id => id.trim()).filter(id => allowed.has(id)))].slice(0, 3) : []
     const note = typeof item?.note === 'string' ? item.note.trim() : ''
     const problem = found.get(paragraph.id)
-    if (problem) out.set(paragraph.blockId, { verdict: verdict === 'contradicted' ? 'contradicted' : 'unsupported', note: [problem, verdict !== 'ok' ? note : ''].filter(Boolean).join('；'), sources })
+    if (problem) out.set(paragraph.blockId, { verdict: problem.contradicts || verdict === 'contradicted' ? 'contradicted' : 'unsupported', note: [problem.note, verdict !== 'ok' ? note : ''].filter(Boolean).join('；'), sources })
     else out.set(paragraph.blockId, { verdict, note: verdict === 'ok' ? '' : verdict === 'unchecked' ? '核对模型没有给出这段的判断' : note, sources })
   }
   return out

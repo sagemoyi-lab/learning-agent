@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { CitedChunk, Lesson, Stage } from '@learning-agent/contracts'
 import { FIXTURES, createHarness, textbookSettled, type Harness, type ModelCall } from '../harness.ts'
-import { isPlan, isWriter, textbookReply, titleOf, writePoint } from './fakes.ts'
+import { isPlan, isWriter, outline, planBySubsection, textbookReply, titleOf, writePoint } from './fakes.ts'
 
 const FIXTURE = join(FIXTURES, 'synthetic-long-section')
 const meta = { actor: 'teacher' as const, reason: '教材 A 测试（合成）' }
@@ -170,6 +170,8 @@ it('keeps the ids of the paragraphs that read the same when a lesson is written 
 it('links paragraphs only to the lesson\'s knowledge points and reports what is not explained', async () => {
   let cite: Record<string, string> = {}
   const h = harness(call => {
+    // 本节概念 explains 等压面 from its own chunk.
+    if (isPlan(call)) return planBySubsection(call, [], [{ name: '等压面', chunk: outline(call).find(line => line.text.startsWith('在同一种静止、连通、密度不变的液体中，同一水平面'))!.n }])
     if (!isWriter(call) || titleOf(call) !== '静力学基本方程') return plain(call)
     const formula = /\[(ck_[0-9A-Z]{26})\] [^\n]* · 公式 ·/.exec(call.prompt)![1]
     return [
@@ -197,6 +199,7 @@ it('links paragraphs only to the lesson\'s knowledge points and reports what is 
 
   // By citation: the paragraph cites the chunk 等压面 is sourced in. By name: the stage's core node.
   expect(of('同一水平面上压强相等').nodeIds).toEqual([ids['等压面']])
+  expect(of('**等压面**：').nodeIds).toEqual([ids['等压面']])
   expect(of('这个式子叫静力学基本方程').nodeIds).toEqual([ids['静力学基本方程']])
   // 读数 is named but is neither a core node of the stage nor sourced in the lesson's material.
   expect(h.ctx.learnKnowledge.links(ids['读数']!)).toEqual([])
@@ -217,5 +220,6 @@ it('writes by subsection when the plan is unusable', async () => {
   expect(h.calls.filter(isPlan)).toHaveLength(1)
   expect(h.calls.filter(isWriter).map(titleOf)[0]).toMatch(/^1\.2/)
   expect(h.ctx.learnTextbook.blocks(course.id, lesson.textbookFile).length).toBeGreaterThan(0)
-  expect(h.ctx.learnTextbook.status(lesson.id).check?.notes).toContainEqual(expect.stringMatching(/^列要点没有成功，按小标题分了要点：/))
+  expect(h.ctx.learnTextbook.status(lesson.id).check?.notes).toContainEqual(expect.stringMatching(/^列要点没有成功，按小标题分了要点，没有写本节概念：/))
+  expect((await h.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text).not.toContain('### 本节概念')
 })

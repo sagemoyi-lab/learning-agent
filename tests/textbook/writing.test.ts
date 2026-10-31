@@ -1,12 +1,12 @@
-// textbook (docs/textbook/design.md): a lesson is planned, then written point by point; the writer explains in
-// its own words and names the source text to copy in; the program copies it and joins the points into one
-// lesson with one title and one "读完就答". A point cut off at the output limit is written again as two
+// textbook (docs/textbook/design.md): a lesson is planned, then its concepts and points are written; the
+// writers explain in their own words and name the source text to copy in; the program copies it and joins
+// one title, 本节概念 and 知识点 into one lesson. A point cut off at the output limit is written again as two
 // halves; a lesson that still fails is reported to the teacher, who retries once before handing it back.
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { Stage } from '@learning-agent/contracts'
 import { FIXTURES, createHarness, textbookSettled, type Harness, type ModelCall } from '../harness.ts'
-import { isPlan, isWriter, textbookReply, titleOf, writePoint } from './fakes.ts'
+import { isConcepts, isPlan, isWriter, outline, planBySubsection, textbookReply, titleOf, writePoint } from './fakes.ts'
 
 const FIXTURE = join(FIXTURES, 'synthetic-long-section')
 const meta = { actor: 'teacher' as const, reason: '长小节测试' }
@@ -63,17 +63,28 @@ it('plans the points, writes each in its own words with the source text copied i
   const first = writers.find(call => titleOf(call) === '压强的含义')!
   expect(first.prompt).toContain('单位面积上受到的垂直作用力')
   expect(first.prompt).not.toContain('本小节的合成内容可以归纳为三点')
-  for (const call of writers) {
+  // One call writes 本节概念, from the chunk each concept is explained at; it sees no exercise either.
+  const [concepts, ...more] = h!.calls.filter(isConcepts)
+  expect(more).toEqual([])
+  for (const call of [...writers, concepts!]) {
     expect(call.prompt).not.toContain('敞口水槽中水深 3 m')
     expect(call.prompt).not.toContain('[30 kPa]')
   }
-  expect(h!.calls.filter(call => call.system.startsWith('你为一节教材写'))).toHaveLength(1)
+  // The fake plan puts 压强 at the section's first text chunk.
+  const [definition] = h!.ctx.learnLibrary.courseSources(course.id).flatMap(entry => h!.ctx.learnLibrary.section(entry.sourceId, '1.2')).filter(chunk => chunk.kind === 'text')
+  expect(concepts!.prompt).toContain(`1. 压强（见 ${definition!.id}）`)
+  expect(concepts!.prompt).toContain(definition!.text)
+  // The writers know which concepts are already explained.
+  expect(first.prompt).toContain('# 本节概念（前面已经解释过，用到时直接用，不再重新定义）\n压强')
 
   const text = (await h!.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text
   const lines = text.split('\n')
   expect(lines.filter(line => line.startsWith('## '))).toEqual(['## 1.2 静止流体的压强'])
-  // Each point once, in reading order, then the questions.
-  expect(lines.filter(line => line.startsWith('### '))).toEqual(['### 压强的含义', '### 压强的几种表示', '### 静力学基本方程', '### 基本方程的应用', '### 常见误区', '### 小结', '### 读完就答'])
+  // The concepts, then each point once, in reading order; no recall questions (10-31).
+  expect(lines.filter(line => line.startsWith('### '))).toEqual(['### 本节概念', '### 知识点'])
+  expect(lines.filter(line => line.startsWith('#### '))).toEqual(['#### 压强的含义', '#### 压强的几种表示', '#### 静力学基本方程', '#### 基本方程的应用', '#### 常见误区', '#### 小结'])
+  expect(text).toContain(`### 本节概念\n\n**压强**：用自己的话说清它是什么。[合成资料 p.1](cite:${definition!.id}) ^`)
+  expect(text).not.toContain('读完就答')
   // The formula comes in as the material has it, in a quote box headed by its citation.
   const formula = h!.ctx.learnLibrary.courseSources(course.id).flatMap(entry => h!.ctx.learnLibrary.section(entry.sourceId, '1.2.3')).find(chunk => chunk.kind === 'formula')!
   expect(text).toContain(`> [!quote] 原文 · [${formula.citation}](cite:${formula.id})\n${formula.text.split('\n').map(line => `> ${line}`).join('\n')}\n\n^`)
@@ -134,7 +145,30 @@ it('writes a cut-off point again as two halves, the second going on without a he
   expect(again).toHaveLength(3)
   expect(again[2]!.prompt).toContain('不要写标题')
   const text = (await h!.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text
-  expect(text.split('\n').filter(line => line === '### 静力学基本方程')).toHaveLength(1)
+  expect(text.split('\n').filter(line => line === '#### 静力学基本方程')).toHaveLength(1)
+})
+
+it('writes many concepts in groups, a cut-off group again as two halves, and keeps their order', async () => {
+  let cut = false
+  const names = Array.from({ length: 10 }, (_, index) => `第${index + 1}个概念`)
+  const { course, lesson } = await setUp(call => {
+    if (isPlan(call)) return planBySubsection(call, [], outline(call).filter(line => line.kind === '正文').slice(0, 10).map((line, index) => ({ name: names[index]!, chunk: line.n })))
+    // The first group's first attempt runs out of output budget.
+    if (!cut && isConcepts(call)) {
+      cut = true
+      return { finish: 'max-tokens' }
+    }
+    return usual(call)
+  })
+  const settled = textbookSettled(h!.ctx, lesson.id)
+  await h!.endpoint('curriculum', 'confirmDesign', { stageId: lesson.stageId })
+  expect(await settled).toBe('ready')
+  const lists = h!.calls.filter(isConcepts).map(call => [...call.prompt.matchAll(/^\d+\. (第\d+个概念)/gm)].map(match => match[1]))
+  // Two groups of five; the first, cut off, as three and two.
+  expect(lists).toEqual([names.slice(0, 5), names.slice(5), names.slice(0, 3), names.slice(3, 5)])
+  const text = (await h!.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text
+  const opening = text.split('### 本节概念')[1]!.split('### 知识点')[0]!
+  expect([...opening.matchAll(/\*\*(第\d+个概念)\*\*/g)].map(match => match[1])).toEqual(names)
 })
 
 it('keeps the stage designing when the first lesson fails and a later textbook succeeds', async () => {

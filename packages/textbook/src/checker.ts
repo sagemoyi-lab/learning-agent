@@ -3,7 +3,7 @@
 // found them in. A failed call leaves its paragraphs unchecked; the lesson is published all the same.
 import type { Context } from '@deepseek-ai/cordis'
 import { complete, parseJsonReply } from '@learning-agent/kit'
-import { CHECK_SYSTEM, addSources, checkPrompt, judge, paragraphsOf, precheck, type CheckChunk, type Paragraph, type ParagraphCheck } from './check.ts'
+import { CHECK_SYSTEM, addSources, checkPrompt, judge, paragraphsOf, precheck, type CheckChunk, type Paragraph, type ParagraphCheck, type Problem } from './check.ts'
 
 /** Output budget of one check call; the model's thinking counts against it. */
 const CHECK_MAX_TOKENS = 8000
@@ -42,18 +42,16 @@ export async function checkPoint(deps: CheckDeps, point: PointToCheck): Promise<
   if (paragraphs.length === 0) return { body: point.body, checks: new Map(), checked: true, notes: [] }
   const material = point.chunks.map(chunk => chunk.text).join('\n')
   const allowed = new Set(point.chunks.map(chunk => chunk.id))
-  const found = new Map<string, string>()
-  const unknown = new Map<string, readonly string[]>()
+  const found = new Map<string, Problem>()
   for (const paragraph of paragraphs) {
-    const result = precheck(paragraph.text, material, point.stems)
-    if (result.problem) found.set(paragraph.id, result.problem)
-    if (result.unknown.length) unknown.set(paragraph.id, result.unknown)
+    const problem = precheck(paragraph.text, material, point.stems)
+    if (problem) found.set(paragraph.id, problem)
   }
   const notes: string[] = []
   const checks = new Map<string, ParagraphCheck>()
   /** One reply, asked again once when it does not parse; a reply cut off at the output limit is halved instead. */
   const run = async (group: readonly Paragraph[], depth = 0): Promise<void> => {
-    const prompt = checkPrompt(group, point.chunks, unknown)
+    const prompt = checkPrompt(group, point.chunks)
     const input = { system: CHECK_SYSTEM, prompt, maxTokens: CHECK_MAX_TOKENS }
     const write = async () => {
       const text = await complete(deps.ctx, { ...input, purpose: 'learning-textbook-check', model: deps.model, signal: deps.signal })

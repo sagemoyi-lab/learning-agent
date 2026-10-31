@@ -1015,6 +1015,9 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 /* textbook mode */
 .la-textbook { font-size: var(--la-fs-xl); line-height: 1.85; }
 .la-textbook h1, .la-textbook h2, .la-textbook h3 { margin-top: 1.6em; }
+/* A lesson's two parts, 本节概念 and 知识点, stand above the points under 知识点 (docs/textbook/design.md). */
+.la-textbook h3 { font-size: 1.25em; margin-top: 2em; }
+.la-textbook h4 { font-size: 1.05em; }
 .la-textbook > .la-block-plain:first-child > h1:first-child, .la-textbook > .la-block-plain:first-child > h2:first-child { margin-top: 0; }
 /* Each heading sits in its own block, and the blocks reset their first child's top margin; give the space back. */
 .la-textbook > :is(.la-block, .la-block-plain):not(:first-child) > :is(h1, h2, h3, h4):first-child { margin-top: 1.6em; }

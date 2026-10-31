@@ -7,10 +7,12 @@ import type { CitedChunk } from '@learning-agent/contracts'
 export const EMBED_LIMIT = 12
 
 const ID = 'ck_[0-9A-HJKMNP-TV-Z]{26}'
+/** A range's last chunk, in full or as the end of its id that differs from the first's (`![[ck_…175..176]]`). */
+const LAST = `${ID}|[0-9A-HJKMNP-TV-Z]{1,25}`
 /** One embed, alone on its line. */
-export const EMBED_LINE = new RegExp(`^!\\[\\[\\s*(${ID})(?:\\s*(?:\\.\\.|…|~|～|—|–|-)\\s*(${ID}))?\\s*\\]\\]$`)
+export const EMBED_LINE = new RegExp(`^!\\[\\[\\s*(${ID})(?:\\s*(?:\\.\\.|…|~|～|—|–|-)\\s*(${LAST}))?\\s*\\]\\]$`)
 /** An embed anywhere in a line, for one the writer left inside a paragraph. */
-export const EMBED_ANYWHERE = new RegExp(`!\\[\\[\\s*(${ID})(?:\\s*(?:\\.\\.|…|~|～|—|–|-)\\s*(${ID}))?\\s*\\]\\]`, 'g')
+export const EMBED_ANYWHERE = new RegExp(`!\\[\\[\\s*(${ID})(?:\\s*(?:\\.\\.|…|~|～|—|–|-)\\s*(${LAST}))?\\s*\\]\\]`, 'g')
 
 /** Where embeds may come from: the lesson's material in reading order, and single chunks found for a gap. */
 export interface EmbedSource {
@@ -22,7 +24,8 @@ export interface EmbedSource {
 const SOLUTION_START = /^\s*[（(]?\s*解\s*[）)]?|^\s*\*\*解/
 
 /** The quote boxes for one embed, or why it cannot be embedded. */
-export function expandEmbed(from: string, to: string | undefined, source: EmbedSource): { readonly boxes: string[] } | { readonly error: string } {
+export function expandEmbed(from: string, last: string | undefined, source: EmbedSource): { readonly boxes: string[] } | { readonly error: string } {
+  const to = last && !last.startsWith('ck_') ? `${from.slice(0, from.length - last.length)}${last}` : last
   const at = source.order.findIndex(chunk => chunk.id === from)
   if (at < 0) {
     const single = source.extra.find(chunk => chunk.id === from)

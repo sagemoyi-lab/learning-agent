@@ -1,7 +1,8 @@
-// The points of a lesson (docs/textbook/design.md, 讲解与原文): one model call splits the section's material
-// into a few points, each a run of consecutive chunks, and says what the chapter's exercises need the
-// learner to know. The program owns the shape: every chunk belongs to one point, in reading order, and a
-// worked example stays in one point with its solution. The writer later sees what is needed, never the
+// The plan of a lesson (docs/textbook/design.md, 一节教材): one model call lists the concepts the section
+// needs, splits its material into a few points, each a run of consecutive chunks, and says what the
+// chapter's exercises need the learner to know. The program owns the shape: every chunk belongs to one
+// point, in reading order, a worked example stays in one point with its solution, and a concept whose
+// number is wrong is found in the material by its name. The writers see what is needed, never the
 // exercises themselves.
 import type { CitedChunk } from '@learning-agent/contracts'
 import { materialSize, planParts } from './format.ts'
@@ -9,6 +10,8 @@ import { materialSize, planParts } from './format.ts'
 /** Points per lesson, and the most material one point is written from. */
 const MAX_POINTS = 8
 const POINT_LIMIT = 12_000
+/** Concepts in a lesson's 本节概念. */
+const MAX_CONCEPTS = 15
 /** Exercise stems shown when planning, and how much of each. */
 const MAX_STEMS = 24
 const STEM_CHARS = 300
@@ -22,6 +25,17 @@ export interface Need {
   readonly covered: boolean
 }
 
+/** A concept of 本节概念: the chunk where the material explains it, none when the material does not (looked for elsewhere). */
+export interface Concept {
+  readonly name: string
+  readonly chunk?: CitedChunk
+}
+
+export interface Plan {
+  readonly concepts: Concept[]
+  readonly points: Point[]
+}
+
 export interface Point {
   readonly title: string
   /** What the point has to make clear, in one sentence. */
@@ -31,10 +45,12 @@ export interface Point {
   readonly needs: readonly Need[]
 }
 
-export const PLAN_SYSTEM = `你为一位学习者规划一节教材怎么讲。给你本节资料的提纲（按顺序编号的片段，每段只列开头）、学习目标、阶段设计书的教学部分、学习者的掌握情况，以及本章的课后习题（只有题干，没有答案）。
-1. 把本节资料按顺序分成 3 到 8 个要点（资料很短时可以只有 1 到 2 个）。每个要点是资料里连续的一段：from、to 是片段编号。按"学习者要弄懂的一件事"来分，不必和资料的小标题一一对应；例题和它的解答放在同一个要点里。title 是要点标题（简短，不带编号），focus 用一句话说这一点要讲清什么。
-2. 从习题里挑出和本节有关的题，写出做这些题要会的概念、方法、装置或条件（needs），每条一句，写成要学的内容，不抄题目、不写题目里的数字。point 是它属于第几个要点；covered 表示本节资料有没有讲到（资料没讲、做题却要用的写 false）。和本节无关的题不用管；没有习题就给空数组。
-只输出 JSON：{"points":[{"title":"…","focus":"…","from":1,"to":12}],"needs":[{"text":"…","point":1,"covered":true}]}`
+export const PLAN_SYSTEM = `你为一位学习者规划一节教材怎么讲。教材分两部分：先是"本节概念"，逐个解释读这一节要知道的概念；再是"知识点"，按要点讲，能从头读到尾。给你本节资料的提纲（按顺序编号的片段，每段只列开头）、学习目标、阶段设计书的教学部分、学习者的掌握情况，以及本章的课后习题（只有题干，没有答案）。
+1. 先从习题里挑出和本节有关的题，下面几步都围绕做这些题要会的东西来定。和本节无关的题不用管。
+2. 列出本节概念（concepts）：资料里定义或引入、讲解要用到的概念（物理量、术语、装置、方法、定律等），以及做这些题要用、资料却没讲的概念。单位和式子里的单个符号不单列，放在用到它们的概念里讲。name 是概念名，用资料里的叫法；chunk 是资料里定义或第一次讲它的片段编号，资料里没讲的写 0。按在资料里出现的顺序，最多 15 个。
+3. 把本节资料按顺序分成 3 到 8 个要点（资料很短时可以只有 1 到 2 个）。每个要点是资料里连续的一段：from、to 是片段编号。按"学习者要弄懂的一件事"来分，不必和资料的小标题一一对应；例题和它的解答放在同一个要点里。title 是要点标题（简短，不带编号），focus 用一句话说这一点要讲清什么。
+4. 写出做这些题要会的方法、关系、条件或步骤（needs），每条一句，写成要学的内容，不抄题目、不写题目里的数字；已经列为概念的不再写。point 是它属于第几个要点；covered 表示本节资料有没有讲到（资料没讲、做题却要用的写 false）。没有习题就给空数组。
+只输出 JSON：{"concepts":[{"name":"…","chunk":3}],"points":[{"title":"…","focus":"…","from":1,"to":12}],"needs":[{"text":"…","point":1,"covered":true}]}`
 
 const KIND: Record<string, string> = { heading: '小标题', text: '正文', formula: '公式', table: '表', figure: '图', example: '例题' }
 
@@ -58,7 +74,7 @@ export function stemsOf(exercises: readonly CitedChunk[]): string[] {
 export function planPrompt(input: { readonly context: string; readonly material: readonly CitedChunk[]; readonly stems: readonly string[]; readonly remedial: boolean }): string {
   return [
     input.context,
-    input.remedial ? '# 补课\n这是补课课时：只为复盘里没过的地方列要点，可以只有 1 到 3 个，没过的地方之外的资料归到最近的要点里。' : '',
+    input.remedial ? '# 补课\n这是补课课时：只为复盘里没过的地方列要点，可以只有 1 到 3 个，没过的地方之外的资料归到最近的要点里；概念只列没过的地方用到的。' : '',
     `# 本节资料提纲（${input.material.length} 段）\n${outlineOf(input.material)}`,
     `# 本章课后习题（只有题干）\n${input.stems.length ? input.stems.map((stem, index) => `${index + 1}. ${stem}`).join('\n') : '（没有）'}`,
   ].filter(Boolean).join('\n\n')
@@ -80,10 +96,10 @@ export function copiesStem(text: string, stems: readonly string[], run = 10): bo
 interface Range { from: number; to: number; title: string; focus: string; needs: Need[] }
 
 /**
- * The points of a reply, shaped by the program; undefined when the reply gives no usable point.
+ * The concepts and points of a reply, shaped by the program; undefined when the reply gives no usable point.
  * Indexes in the reply are 1-based chunk numbers of `material`.
  */
-export function readPlan(reply: unknown, material: readonly CitedChunk[], stems: readonly string[]): Point[] | undefined {
+export function readPlan(reply: unknown, material: readonly CitedChunk[], stems: readonly string[]): Plan | undefined {
   const raw = (reply as { points?: unknown })?.points
   if (!Array.isArray(raw)) return undefined
   const n = material.length
@@ -108,7 +124,30 @@ export function readPlan(reply: unknown, material: readonly CitedChunk[], stems:
     const target = (named && shaped.find(point => point.from <= named.from && named.from <= point.to)) ?? shaped[0]!
     if (!target.needs.some(item => item.text === text)) target.needs.push({ text, covered: need.covered !== false })
   }
-  return split(shaped, material).map(range => ({ title: range.title, focus: range.focus, chunks: material.slice(range.from, range.to + 1), needs: range.needs }))
+  const points = split(shaped, material).map(range => ({ title: range.title, focus: range.focus, chunks: material.slice(range.from, range.to + 1), needs: range.needs }))
+  return { concepts: conceptsOf((reply as { concepts?: unknown }).concepts, material, stems), points }
+}
+
+/**
+ * The concepts of a reply in reading order, those the material does not explain last: each at the chunk the
+ * reply named, or else at the first chunk that has its name. Repeats and names copied from an exercise go.
+ */
+function conceptsOf(raw: unknown, material: readonly CitedChunk[], stems: readonly string[]): Concept[] {
+  const seen = new Set<string>()
+  const found: { name: string; at: number }[] = []
+  for (const item of Array.isArray(raw) ? raw as { name?: unknown; chunk?: unknown }[] : []) {
+    const name = typeof item?.name === 'string' ? item.name.replaceAll('*', '').trim() : ''
+    const key = squeeze(name)
+    if ([...name].length < 2 || [...name].length > 20 || seen.has(key) || copiesStem(name, stems)) continue
+    seen.add(key)
+    let at = Number(item.chunk) - 1
+    // A heading names a part: the concept is explained in the text under it.
+    while (material[at]?.kind === 'heading') at += 1
+    if (!material[at]) at = material.findIndex(chunk => chunk.kind !== 'heading' && squeeze(chunk.text).includes(key))
+    found.push({ name, at })
+  }
+  const order = (at: number) => (at < 0 ? material.length : at)
+  return found.sort((a, b) => order(a.at) - order(b.at)).slice(0, MAX_CONCEPTS).map(({ name, at }) => (at < 0 ? { name } : { name, chunk: material[at]! }))
 }
 
 /** Points by subsection when there is no usable plan: the parts the material was written in before 10-15. */

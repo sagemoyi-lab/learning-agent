@@ -54,7 +54,7 @@ function finishLessons(stage: Stage): void {
 
 beforeAll(async () => {
   h = createHarness(call => {
-    if (call.purpose === 'learning-textbook') return '## 1.1 静水压强（补课）\n\n多步题先列已知量。\n\n### 读完就答\n\n1. 先算哪一步？'
+    if (call.purpose === 'learning-textbook') return '## 1.1 静水压强（补课）\n\n多步题先列已知量。'
     throw new Error(`unexpected model call: ${call.purpose}`)
   })
   courseId = (await h.endpoint('core', 'createCourse', { title: '课程设计 B（合成资料）' })).id

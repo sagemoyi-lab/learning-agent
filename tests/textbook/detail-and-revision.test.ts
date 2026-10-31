@@ -46,7 +46,7 @@ function model(cite: Record<string, string>, options: Options) {
       return [
         '### 压强的含义',
         `压强是指单位面积上受到的垂直作用力。[合成资料 p.1](cite:${cite.pressure})`,
-        `静止流体内部任一点的压强在各个方向上大小相同。[合成资料 p.1](cite:${cite.isotropic})`,
+        `静止流体里任意一点的压强，朝哪个方向量都一样大。[合成资料 p.1](cite:${cite.isotropic})`,
       ].join('\n\n')
     }
     // Never names the gauge pressure, so the coverage check has something to report.
@@ -162,7 +162,7 @@ it('rewrites the paragraphs asked for, leaves the others as they were, and never
   expect(await generate(lesson)).toBe('ready')
   const before = await paragraphs(course.id, lesson)
   const steps = before.find(item => item.text.includes('逐条检查'))!
-  const isotropic = before.find(item => item.text.includes('各个方向上大小相同'))!
+  const isotropic = before.find(item => item.text.includes('朝哪个方向量都一样大'))!
   const checksBefore = h!.calls.filter(isCheck).length
 
   // Through the teacher's tool.

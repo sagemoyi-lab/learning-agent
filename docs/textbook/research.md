@@ -337,3 +337,13 @@ W3C TextQuoteSelector 用原文、前后文帮助消歧，本项目已有 TextQu
   - 跨单元的"教学视图"服务；
   - 取消生成：产品里没有取消入口；
   - DSH jobs 登记：我们的页面已经显示进度。
+
+## 14. 先讲本节概念（10-31）
+
+你 10-31 定了一节教材的结构：先解释本节要知道的概念，再讲能通读的知识点。动手前查了这种编排有没有依据：
+
+- **预先训练（pre-training）原则：** 学习者先知道主要概念的名字和特点，再学完整的讲解，学得更好；证据集中在入门的学习者身上，研究数量不多。出处：Mayer, Mathias & Wetzell (2002), *Journal of Experimental Psychology: Applied* 8, 147–154；Clark & Mayer 的 *e-Learning and the Science of Instruction* 把它写成设计原则。
+- **先分开学单个要素，再学它们的相互关系：** Pollock、Chandler 和 Sweller 的五个实验里，这样做对新手有效（实验 1、3、5），另两个实验没有差别；要素之间的相互作用多不多，取决于学习者已有的知识。出处：[Assimilating complex information](https://doi.org/10.1016/s0959-4752(01)00016-0)（*Learning and Instruction* 12, 61–86）。
+- **对本项目的意思：**
+  - 概念部分对刚开始学的地方最有用；对已经会的知识点只需一句带过，所以概念解释按掌握状态定详略（和 §3 一致）。
+  - 这两项研究都没有检验"由模型生成的概念解释"，效果仍要看你的试用和之后的独立作答。

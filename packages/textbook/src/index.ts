@@ -1,10 +1,11 @@
 // textbook unit, host half. Provides `ctx.learnTextbook` (contracts §5.1): generates each lesson's
 // textbook file from the course's skeleton material and the stage design, keeps the block index
 // (ids, citations, unverified flags, linked nodes), answers block lookups.
-// A lesson is explanation in the writer's words plus source text the program copies in (docs/textbook/
-// design.md, 讲解与原文): one call plans the points (with what the chapter's exercises need), gaps are
-// looked for in the course's other material and on the web, each point is written and its explanation
-// checked against its material. Each lesson's generation is kept in `textbook_runs`, so a restart resumes
+// A lesson is 本节概念, then 知识点: explanation in the writer's words plus source text the program copies
+// in (docs/textbook/design.md, 一节教材). One call plans the concepts and points (with what the chapter's
+// exercises need), gaps are looked for in the course's other material and on the web, the concepts and
+// each point are written and checked against their material, and paragraphs with a formula unlike the
+// source or copied from it are rewritten once. Each lesson's generation is kept in `textbook_runs`, so a restart resumes
 // queued and interrupted lessons and reuses the replies already written; each paragraph's check is kept
 // in `textbook_checks`, bound to the paragraph's text.
 import { createHash, randomUUID } from 'node:crypto'
@@ -30,11 +31,12 @@ import {
 import { complete, must, now, parseJsonReply } from '@learning-agent/kit'
 import { roleModel, Schema } from '@learning-agent/kit/settings'
 import { z } from 'zod'
-import { flagged, reasonOf, type CheckChunk, type ParagraphCheck } from './check.ts'
+import { copiesOf, flagged, paragraphsOf, reasonOf, type CheckChunk, type ParagraphCheck } from './check.ts'
 import { checkPoint, type CheckOutcome } from './checker.ts'
+import { CONCEPTS_SYSTEM, conceptList, conceptMaterial } from './concepts.ts'
 import { REVISER_SYSTEM, applyRevision, parseRevision, revisionPrompt } from './revise.ts'
-import { finalize, halve, indexBlocks, pointText, teachingPartOf } from './format.ts'
-import { PLAN_SYSTEM, fallbackPoints, planPrompt, readPlan, stemsOf, type Point } from './plan.ts'
+import { asConcept, conceptBlocks, conceptsText, finalize, halve, indexBlocks, pointText, teachingPartOf } from './format.ts'
+import { PLAN_SYSTEM, fallbackPoints, planPrompt, readPlan, stemsOf, type Concept, type Plan } from './plan.ts'
 
 export const name = 'learning-textbook'
 export const inject = ['learnCore', 'learnCurriculum', 'learnLibrary', 'learnKnowledge', 'learnLearner', 'llm', 'sessionController']
@@ -169,19 +171,16 @@ const Run = z.object({
 })
 type Run = z.infer<typeof Run>
 
-const WRITER_SYSTEM = `你为一位具体的学习者写一节教材里的一个要点。教材由两部分组成：你写的讲解，和程序从资料里原样放进来的原文。规则：
-1. 讲解用你自己的话、按学习者的水平讲：这一点要解决什么问题，道理是什么，怎么用，容易错在哪。简练，不照抄资料原句，不逐段复述资料。
+const WRITER_SYSTEM = `你为一位具体的学习者写一节教材"知识点"部分里的一个要点。教材开头的"本节概念"已经逐个解释了概念；"知识点"由你写的讲解和程序从资料里原样放进来的原文组成，要能从头读到尾。规则：
+1. 讲解用你自己的话、按学习者的水平讲：这一点要解决什么问题，道理是什么，怎么用，容易错在哪。简练，不照抄资料原句，不逐段复述资料。"本节概念"里解释过的概念直接用，不再重新定义。
 2. 讲解里的事实只能来自给出的资料片段和网页摘录，不用你自己的知识；资料里没有的内容不写。讲事实的句子末尾标出处：[《书名》p.页码](cite:片段ID)；网页摘录写成 [网页标题](网址)。出处只用这样的链接，正文里不写资料名、网站名或网址。
-3. 公式、图、表、例题的题目和原书解答不要自己重写，而是嵌入原文：单独一行写 ![[片段ID]]，连续几段写 ![[第一段ID..最后一段ID]]，程序会放进原文。正文段落不嵌入：讲解讲过的内容不再重复放原文，学习者点出处标签就能看原文。讲解里可以用行内公式指代符号和关系（如 $p_2=p_1+\\rho g h$），完整的式子用嵌入。讲到哪张图就在那里嵌入它。
-4. 例题：先嵌入题目，再用两三句话讲解题思路（为什么这样列式、关键一步在哪），最后嵌入原书解答。不改编、不自编题目。
-5. 不写习题、小测题或测试安排；"做练习要会的"要讲到，但只讲道理，不出题、不提习题。
-6. 有"学习者对本课知识点的掌握"时按它定详略：已经会的一两句带过，保留嵌入的公式；薄弱的展开、拆步骤。不要在正文里复述学习者的掌握情况。除了出处和嵌入里的片段 ID，正文不出现内部编号（kn_、ck_ 等）。
-7. 篇幅大致和这一点的资料原文相当，已经会的更短；不逐条复述资料，不在末尾把前面讲过的再总结一遍。要点里不再分小标题，也不要用单独一行加粗字当小标题。
-8. 中文。直接输出 Markdown，不要前言后语，不要代码块包裹。`
-
-const QUESTIONS_SYSTEM = `你为一节教材写"读完就答"：2 个凭记忆作答的小问题，帮助学习者检查自己读懂了没有。
-只依据给出的教材正文出题，不给答案，不出计算题，不写内部编号。
-只输出：先一行 "### 读完就答"，再两行编号问题（"1. …"、"2. …"）。`
+3. 公式、图、表、例题的题目和原书解答不要自己重写，而是嵌入原文：单独一行写 ![[片段ID]]，连续几段写 ![[第一段ID..最后一段ID]]，程序会放进原文。正文段落不嵌入：讲解讲过的内容不再重复放原文，学习者点出处标签就能看原文。讲到哪张图就在那里嵌入它。
+4. 公式和资料保持一致：行内公式只写资料里原样出现的式子或单个符号（如 $p_2=p_1+\\rho g h$），不变形、不合并、不推导新式子；需要变形时用文字说明怎么变，完整的式子用嵌入。
+5. 例题：先嵌入题目，再用两三句话讲解题思路（为什么这样列式、关键一步在哪），最后嵌入原书解答。不改编、不自编题目。
+6. 不写习题、小测题或测试安排。"做练习要会的"每一条都要讲到：它是什么、什么时候用、怎么用、容易错在哪；只讲道理，不出题、不提习题。
+7. 有"学习者对本课知识点的掌握"时按它定详略：已经会的一两句带过，保留嵌入的公式；薄弱的展开、拆步骤。不要在正文里复述学习者的掌握情况。除了出处和嵌入里的片段 ID，正文不出现内部编号（kn_、ck_ 等）。
+8. 篇幅大致和这一点的资料原文相当，已经会的更短；不逐条复述资料，不在末尾把前面讲过的再总结一遍。要点里不再分小标题，也不要用单独一行加粗字当小标题。
+9. 中文。直接输出 Markdown，不要前言后语，不要代码块包裹。`
 
 /**
  * A remedial lesson (docs/curriculum/design.md, 补课单元) mends what the stage review found instead of
@@ -195,14 +194,20 @@ const REMEDIAL_NOTE = `这是补课课时：学习者已经学过这一节，阶
 
 /** Material per point when there is no usable plan; a part this size is written within the output budget even with thinking. */
 const PART_LIMIT = 6000
-/** Output budgets of a writer and a planning call; the model's thinking counts against them (a plan cut off falls back to subsections). */
+/**
+ * Output budgets of a writer and a planning call; the model's thinking counts against them (a plan cut off
+ * falls back to subsections). Listing the concepts too, a plan thought past 16000 on a 44-chunk section (10-31).
+ */
 const WRITER_MAX_TOKENS = 16_000
-const PLAN_MAX_TOKENS = 16_000
+const PLAN_MAX_TOKENS = 32_000
 /** Characters of material up to which every point is checked against the whole section. */
 const CHECK_WHOLE = 30_000
 /** Needs looked for outside the lesson's material, and what is kept of a web page. */
 const GAP_LIMIT = 3
 const WEB_PASSAGES = 3
+/** Knowledge points the learner already has that 本节概念 may build on, and concepts one call explains. */
+const KNOWN_LIMIT = 15
+const CONCEPT_GROUP = 8
 const PASSAGE_CHARS = 700
 const QUEUED = '排队等待生成'
 
@@ -215,6 +220,30 @@ function materialOf(chunks: readonly CitedChunk[]): string {
     const bare = chunk.kind === 'figure' && /^（?图）?$/.test(chunk.text.trim())
     return `[${chunk.id}] ${chunk.citation} · ${KIND_LABEL[chunk.kind] ?? chunk.kind} · ${chunk.section.at(-1) ?? ''}\n${bare ? '（无图注的图）' : chunk.text}`
   }).join('\n\n')
+}
+
+/** `items` in the fewest groups of at most `size`, as even as they can be. */
+function groupsOf<T>(items: readonly T[], size: number): T[][] {
+  const count = Math.ceil(items.length / size)
+  const each = Math.ceil(items.length / Math.max(1, count))
+  return Array.from({ length: count }, (_, index) => items.slice(index * each, (index + 1) * each))
+}
+
+/** The one page given from the site a link names by its root alone: a writer cited the site, not the page (10-31). */
+function pageOnSite(url: string, pages: readonly WebUse[]): string | undefined {
+  try {
+    const link = new URL(url)
+    if (link.pathname.replace(/\/+$/, '') !== '' || link.search) return undefined
+    const same = pages.filter(page => new URL(page.url).host === link.host)
+    return same.length === 1 ? same[0]!.url : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Web pages as a writer sees them: title, address, site and authority, then the passages kept. */
+function pagesOf(pages: readonly WebUse[]): string {
+  return pages.map(page => `[${page.title}](${page.url}) · ${page.site} · ${page.level}\n${page.passages.join('\n\n')}`).join('\n\n')
 }
 
 const toCheck = (chunk: CitedChunk): CheckChunk => ({ id: chunk.id, text: chunk.text, kind: chunk.kind, citation: chunk.citation })
@@ -355,19 +384,28 @@ class LearnTextbookService extends Service implements LearnTextbook {
   /** Contradicted paragraphs of a checked draft, rewritten against the material once; the rest as checked. */
   private async correct(lesson: Lesson, courseId: string, material: readonly CitedChunk[], stems: readonly string[], outcome: CheckOutcome, newId: () => string): Promise<CheckOutcome> {
     const wrong = [...outcome.checks].filter(([, check]) => check.verdict === 'contradicted').map(([id]) => id).slice(0, REVISE_LIMIT)
-    if (wrong.length === 0) return outcome
-    this.progress(lesson, courseId, { state: 'running', message: `正在按原文改正 ${lesson.number} 里和原文不一致的 ${wrong.length} 段` })
+    // Copied from the source (10-31): said again in other words; still alike afterwards is no error.
+    const copies = copiesOf(material.map(chunk => chunk.text).join('\n'))
+    const copied = paragraphsOf(outcome.body).filter(paragraph => !wrong.includes(paragraph.blockId) && copies(paragraph.text)).map(paragraph => paragraph.blockId).slice(0, REVISE_LIMIT - wrong.length)
+    const targets = [...wrong, ...copied]
+    if (targets.length === 0) return outcome
+    this.progress(lesson, courseId, { state: 'running', message: `正在修改 ${lesson.number} 里和原文不一致或照抄原文的 ${targets.length} 段` })
     const texts = new Map(indexBlocks(outcome.body).map(block => [block.id, block.text]))
-    const reasons = wrong.map(id => reasonOf(texts.get(id) ?? '', outcome.checks.get(id)!)).join('；')
+    const instruction = [
+      wrong.length ? `核对发现这些段落和资料原文不一致：${wrong.map(id => reasonOf(texts.get(id) ?? '', outcome.checks.get(id)!)).join('；')}。按原文改正不一致的地方，式子改用资料里的原式。` : '',
+      copied.length ? `这些段落几乎照抄了资料原文：${copied.map(id => reasonOf(texts.get(id) ?? '', { verdict: 'ok', note: '照抄原文', sources: [] })).join('；')}。换成自己的话讲，意思、出处和式子不变。` : '',
+      '其余照旧。',
+    ].join('')
     try {
-      const fixed = await this.revise(lesson, courseId, material, stems, outcome.body, wrong, `核对发现这些段落和资料原文不一致：${reasons}。按原文改正不一致的地方，其余照旧。`, newId)
+      const fixed = await this.revise(lesson, courseId, material, stems, outcome.body, targets, instruction, newId)
       const checks = new Map(outcome.checks)
-      for (const id of wrong) checks.delete(id)
+      // A target the reply left alone keeps its check.
+      for (const id of fixed.into.keys()) checks.delete(id)
       for (const [id, item] of fixed.checks) checks.set(id, item)
       return { body: fixed.body, checks, checked: outcome.checked && fixed.checked, notes: [...outcome.notes, ...fixed.notes] }
     } catch (error) {
       if (this.stopping.signal.aborted) throw error
-      return { ...outcome, notes: [...outcome.notes, `按原文改正没有完成：${(error as Error).message}`] }
+      return { ...outcome, notes: [...outcome.notes, `按原文修改没有完成：${(error as Error).message}`] }
     }
   }
 
@@ -385,12 +423,16 @@ class LearnTextbookService extends Service implements LearnTextbook {
       const before = blocks[index + 1] && targets.includes(blocks[index + 1]!.id), after = blocks[index - 1] && targets.includes(blocks[index - 1]!.id)
       return before || after ? [{ text: block.text, after: before ? '在要改的段落前面' : '在要改的段落后面' }] : []
     })
+    // A paragraph of 本节概念 stays one `**name**：…` paragraph, without source text copied in.
+    const concepts = conceptBlocks(body)
+    const named = targets.filter(id => concepts.has(id))
+    const form = named.length ? `其中 ${named.join('、')} 是"本节概念"的段落：仍写成一段"**概念名**：解释"，概念名不变，不嵌入原文，式子写成行内公式。` : ''
     const reply = await complete(this.ctx, {
       system: REVISER_SYSTEM,
-      prompt: revisionPrompt({ heading: `${lesson.number} ${lesson.title}`, instruction, targets: blocks.filter(block => targets.includes(block.id)).map(block => ({ id: block.id, text: block.text })), around, material: [...near, ...others] }),
+      prompt: revisionPrompt({ heading: `${lesson.number} ${lesson.title}`, instruction: `${instruction}${form}`, targets: blocks.filter(block => targets.includes(block.id)).map(block => ({ id: block.id, text: block.text })), around, material: [...near, ...others] }),
       purpose: 'learning-textbook', model: this.config.model.get(), maxTokens: WRITER_MAX_TOKENS, signal: this.stopping.signal,
     })
-    const revised = parseRevision(reply, targets)
+    const revised = new Map([...parseRevision(reply, targets)].map(([id, text]) => [id, text !== null && concepts.has(id) ? asConcept(concepts.get(id)!, text) : text]))
     if (revised.size === 0) throw new Error('模型没有按格式给出改好的段落，教材没有改动')
     const known = new Set<string>([...near, ...others].map(chunk => chunk.id))
     const applied = applyRevision(body, revised, { knownChunk: id => known.has(id), embed: { order: material, extra: others }, newBlockId: newId })
@@ -612,8 +654,11 @@ class LearnTextbookService extends Service implements LearnTextbook {
     }
   }
 
-  /** The lesson's points: from one planning reply, or by subsection (with why) when the reply is unusable. */
-  private async plan(lesson: Lesson, heading: string, prompt: string, material: readonly CitedChunk[], stems: readonly string[]): Promise<{ readonly points: Point[]; readonly failed?: string }> {
+  /**
+   * The lesson's concepts and points: from one planning reply, or points by subsection and no concepts
+   * (with why) when the reply is unusable.
+   */
+  private async plan(lesson: Lesson, heading: string, prompt: string, material: readonly CitedChunk[], stems: readonly string[]): Promise<Plan & { readonly failed?: string }> {
     const input = { system: PLAN_SYSTEM, prompt, maxTokens: PLAN_MAX_TOKENS, model: this.config.model.get() }
     try {
       const [text] = await this.reply(lesson.id, input, async () => {
@@ -621,23 +666,23 @@ class LearnTextbookService extends Service implements LearnTextbook {
         if (!readPlan(parseJsonReply(text), material, stems)) throw new Error('要点规划没有给出可用的要点')
         return [text]
       })
-      return { points: readPlan(parseJsonReply(text!), material, stems)! }
+      return readPlan(parseJsonReply(text!), material, stems)!
     } catch (error) {
       if (this.stopping.signal.aborted) throw error
       this.ctx.logger('learning-textbook').warn('lesson %s: planning failed, writing by subsection: %s', lesson.number, (error as Error).message)
-      return { points: fallbackPoints(material, heading, PART_LIMIT), failed: (error as Error).message }
+      return { concepts: [], points: fallbackPoints(material, heading, PART_LIMIT), failed: (error as Error).message }
     }
   }
 
   /**
-   * What the exercises need that the lesson's material does not explain (a few at most): the course's other
-   * material first, then one web page of authority 1–2, read and quoted by its address, never added to the
-   * library (10-15). A need found nowhere is said to be missing.
+   * What the lesson needs that its material does not explain (a few at most), for each part that needs it
+   * (`parts[i]` for part i): the course's other material first, then one web page of authority 1–2, read and
+   * quoted by its address, never added to the library (10-15). A gap found nowhere is said to be missing.
    */
-  private async supplement(courseId: string, points: readonly Point[], material: readonly CitedChunk[]): Promise<Supplement[]> {
-    const out: Supplement[] = points.map(() => ({ local: [], web: [], missing: [] }))
+  private async supplement(courseId: string, parts: readonly (readonly string[])[], material: readonly CitedChunk[]): Promise<Supplement[]> {
+    const out: Supplement[] = parts.map(() => ({ local: [], web: [], missing: [] }))
     const own = new Set(material.map(chunk => chunk.id))
-    const gaps = points.flatMap((point, index) => point.needs.filter(need => !need.covered).map(need => ({ index, need: need.text })))
+    const gaps = parts.flatMap((texts, index) => texts.map(need => ({ index, need })))
     const library = this.ctx.learnLibrary
     for (const [at, gap] of gaps.entries()) {
       if (at >= GAP_LIMIT) { out[gap.index]!.missing.push(gap.need); continue }
@@ -690,6 +735,19 @@ class LearnTextbookService extends Service implements LearnTextbook {
     }
   }
 
+  /** 本节概念 for a group of concepts; a reply cut off at the output limit is written again as two halves. */
+  private async writeConcepts(lessonId: string, input: (group: readonly Concept[]) => { readonly system: string; readonly prompt: string; readonly maxTokens: number; readonly model: string | undefined }, group: readonly Concept[], depth = 0): Promise<string> {
+    const call = input(group)
+    try {
+      const [text = ''] = await this.reply(lessonId, call, async () => [await complete(this.ctx, { ...call, purpose: 'learning-textbook-concepts', signal: this.stopping.signal })])
+      return text
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'learning/model/truncated' || group.length < 2 || depth >= 2) throw error
+      const middle = Math.ceil(group.length / 2)
+      return `${await this.writeConcepts(lessonId, input, group.slice(0, middle), depth + 1)}\n\n${await this.writeConcepts(lessonId, input, group.slice(middle), depth + 1)}`
+    }
+  }
+
   private async writeLesson(lessonId: string): Promise<void> {
     const curriculum = this.ctx.learnCurriculum
     const lesson = must(curriculum.lesson(lessonId), 'textbook', '课时', lessonId)
@@ -725,115 +783,159 @@ class LearnTextbookService extends Service implements LearnTextbook {
         remedial ? `# 补课\n${REMEDIAL_NOTE}${review ? `\n\n## 上一阶段的复盘\n${parseFrontmatter(review.text).body.trim()}` : ''}` : '',
       ].filter(Boolean).join('\n\n')
 
-      // 1. The points, with what the chapter's exercises need; the writer never sees the exercises.
+      // 1. The concepts and points, with what the chapter's exercises need; the writers never see the exercises.
       const stems = stemsOf(this.exercises(chunks))
-      const { points, failed: planning } = await this.plan(lesson, heading, planPrompt({ context, material: chunks, stems, remedial }), chunks, stems)
-      // 2. Needs the material does not explain: other course material, then the web.
-      const extra = await this.supplement(courseId, points, chunks)
-      const web = extra.flatMap(item => item.web)
-      const missing = extra.flatMap(item => item.missing)
+      const { concepts, points, failed: planning } = await this.plan(lesson, heading, planPrompt({ context, material: chunks, stems, remedial }), chunks, stems)
+      // 2. What the material does not explain, the concepts' first: other course material, then the web.
+      const unexplained = concepts.filter(concept => !concept.chunk).map(concept => concept.name)
+      const supplements = await this.supplement(courseId, [unexplained, ...points.map(point => point.needs.filter(need => !need.covered && !unexplained.includes(need.text)).map(need => need.text))], chunks)
+      const aside = supplements[0]!
+      const extra = supplements.slice(1)
+      const web = supplements.flatMap(item => item.web)
+      const missing = supplements.flatMap(item => item.missing)
+      // Concepts found nowhere are only named, in the program's note.
+      const explained = concepts.filter(concept => !aside.missing.includes(concept.name))
+      const parts = [...(concepts.length ? ['本节概念'] : []), ...points.map(point => point.title)]
       this.progress(lesson, courseId, {
-        state: 'running', step: 'write', message: `正在编写 ${heading}（0/${points.length} 个要点）`,
-        points: points.map(point => ({ title: point.title, done: false })), web, missing,
+        state: 'running', step: 'write', message: `正在编写 ${heading}（0/${parts.length} 部分）`,
+        points: parts.map((title, index) => ({ title, done: index === 0 && concepts.length > 0 && explained.length === 0 })), web, missing,
       })
 
-      // 3. Each point, two at a time; a lesson of one point is written whole, with its recall questions.
+      // 3. 本节概念 and each point, two at a time; a lesson of one point is written whole.
       const single = points.length === 1
       const outline = points.map((point, index) => `${index + 1}. ${point.title}`).join('\n')
       const prompt = (index: number) => (part: readonly CitedChunk[], first: boolean) => {
         const point = points[index]!
         const { local, web: pages, missing: absent } = extra[index]!
         const scope = remedial && single
-          ? '补课课时，按上面"补课"的要求写，不写整节。最后一个 "### 读完就答" 子标题下给 2 个凭记忆作答的小问题（不给答案），问这次补的地方。'
+          ? '补课课时，按上面"补课"的要求写，不写整节。'
           : !first ? '这一点的资料较长，分两次写，这是后半部分：接着前面写，不要写标题，也不要写开场白。'
-            : single ? '这一节只有这一个要点：直接写正文，不写标题。最后一个 "### 读完就答" 子标题下给 2 个凭记忆作答的小问题（不给答案）。'
-              : `用 "### ${point.title}" 开头，只写这一点，不写本节总结，也不写"读完就答"。`
+            : single ? '这一节只有这一个要点：直接写正文，不写标题。'
+              : `用 "### ${point.title}" 开头，只写这一点，不写本节总结。`
         return [
           context,
           `# 本节：${heading}${single ? '' : `\n本节的要点依次是：\n${outline}\n这次写第 ${index + 1} 个。`}`,
+          explained.length ? `# 本节概念（前面已经解释过，用到时直接用，不再重新定义）\n${explained.map(concept => concept.name).join('、')}` : '',
           `# 这次写：${point.title}${point.focus ? `\n要讲清：${point.focus}` : ''}`,
           point.needs.length ? `# 做练习要会的（只讲道理，不出题、不提习题）\n${point.needs.map(need => `- ${need.text}${need.covered ? '' : absent.includes(need.text) ? '（资料里找不到，不要讲）' : '（本节资料没讲，见补充资料）'}`).join('\n')}` : '',
           `# 写法\n${scope}`,
           `# 资料片段（只能引用和嵌入这些 ID）\n${materialOf(part)}`,
           local.length && first ? `# 补充资料（为"做练习要会的"找来的，可以引用，也可以单独嵌入）\n${materialOf(local)}` : '',
-          pages.length && first ? `# 网页摘录（引用时写成 [网页标题](网址)，不能嵌入）\n${pages.map(page => `[${page.title}](${page.url}) · ${page.site} · ${page.level}\n${page.passages.join('\n\n')}`).join('\n\n')}` : '',
+          pages.length && first ? `# 网页摘录（引用时写成 [网页标题](网址)，不能嵌入）\n${pagesOf(pages)}` : '',
         ].filter(Boolean).join('\n\n')
+      }
+      const ownConcepts = conceptMaterial(explained, chunks)
+      const anchors = this.knownOf(courseId, lesson, chunks)
+      // 本节概念 in groups one reply handles well (15 at once thought past the output budget, 10-31), each with its own material.
+      const groups = groupsOf(explained, CONCEPT_GROUP)
+      const conceptsInput = (group: readonly Concept[]) => {
+        const own = conceptMaterial(group, chunks)
+        const gaps = group.some(concept => !concept.chunk)
+        return {
+          system: CONCEPTS_SYSTEM,
+          prompt: [
+            context,
+            anchors.length ? `# 学习者已经会的（可以拿来类比、衔接，只点名，不讲它们的内容）\n${anchors.join('、')}` : '',
+            `# 本节：${heading}`,
+            `# 要解释的概念（按这个顺序）\n${conceptList(group)}`,
+            own.length ? `# 资料片段（只能引用这些 ID）\n${materialOf(own)}` : '',
+            gaps && aside.local.length ? `# 补充资料（为本节资料没讲的概念找来的，可以引用）\n${materialOf(aside.local)}` : '',
+            gaps && aside.web.length ? `# 网页摘录（引用时写成 [网页标题](网址)）\n${pagesOf(aside.web)}` : '',
+          ].filter(Boolean).join('\n\n'),
+          maxTokens: WRITER_MAX_TOKENS,
+          model: this.config.model.get(),
+        }
       }
       const taken = this.idMaker(courseId)
       // A paragraph that reads exactly as before keeps its id (annotations stay on it); each old id is used once.
       const unchanged = new Map<string, string[]>()
       for (const block of before ? indexBlocks(before.text) : []) unchanged.set(block.text, [...unchanged.get(block.text) ?? [], block.id])
-      const bodies: (string | undefined)[] = new Array(points.length)
       const dropped: string[] = []
-      const draftOf = () => [`## ${heading}`, ...points.map((point, index) => bodies[index] ?? `### ${point.title}\n\n（正在写…）`)].join('\n\n')
+      const finish = (text: string, supplement: Supplement, embed: boolean) => {
+        const done = finalize(text, {
+          knownChunk: id => known.has(id) || supplement.local.some(chunk => chunk.id === id),
+          knownUrl: url => supplement.web.some(page => page.url === url) || pageOnSite(url, supplement.web),
+          ...(embed ? { embed: { order: chunks, extra: supplement.local } } : {}),
+          newBlockId: taken,
+          reuse: piece => unchanged.get(piece)?.shift(),
+        })
+        dropped.push(...done.dropped)
+        return done.body.trim()
+      }
+      const replies: (string | undefined)[] = groups.map(() => undefined)
+      // Whole once every group is written; with every concept found nowhere, only the program's note.
+      let conceptBody = concepts.length && groups.length === 0 ? finish(conceptsText('', aside.missing), aside, false) : undefined
+      const bodies: (string | undefined)[] = new Array(points.length)
+      const draftOf = () => [
+        `## ${heading}`,
+        ...(concepts.length ? [conceptBody ?? '### 本节概念\n\n（正在写…）'] : []),
+        '### 知识点',
+        ...points.map((point, index) => bodies[index] ?? `${single ? '' : `#### ${point.title}\n\n`}（正在写…）`),
+      ].join('\n\n')
       let failure: { readonly error: unknown } | undefined
-      const queue = points.map((_, index) => index)
+      // Negative entries are the groups of 本节概念, written first: the lesson opens with them.
+      const queue = [...groups.map((_, group) => -1 - group), ...points.map((_, index) => index)]
       await Promise.all([0, 1].map(async () => {
         for (let index = queue.shift(); index !== undefined && !failure; index = queue.shift()) {
           try {
-            const point = points[index]!
-            const parts = await this.writePoint(lesson.id, prompt(index), point.chunks, true)
-            const text = parts.map((part, at) => pointText(part.text, part.first && !single ? point.title : undefined, single && at === parts.length - 1)).join('\n\n')
-            const { local, web: pages } = extra[index]!
-            const done = finalize(text, {
-              knownChunk: id => known.has(id) || local.some(chunk => chunk.id === id),
-              knownUrl: url => pages.some(page => page.url === url),
-              embed: { order: chunks, extra: local },
-              newBlockId: taken,
-              reuse: piece => unchanged.get(piece)?.shift(),
-            })
-            // Something the material does not explain, said where it was needed.
-            const absent = extra[index]!.missing
-            bodies[index] = absent.length ? `${done.body.trim()}\n\n> [!note] 资料里没有讲到：${absent.join('；')}。可以问主老师，或在资料库里加一份讲它的资料。` : done.body.trim()
-            dropped.push(...done.dropped)
+            if (index < 0) {
+              replies[-1 - index] = await this.writeConcepts(lesson.id, conceptsInput, groups[-1 - index]!)
+              if (replies.every(reply => reply !== undefined)) conceptBody = finish(conceptsText(replies.join('\n\n'), aside.missing), aside, false)
+            } else {
+              const point = points[index]!
+              const replies = await this.writePoint(lesson.id, prompt(index), point.chunks, true)
+              const body = finish(replies.map(part => pointText(part.text, part.first && !single ? point.title : undefined)).join('\n\n'), extra[index]!, true)
+              // Something the material does not explain, said where it was needed.
+              const absent = extra[index]!.missing
+              bodies[index] = absent.length ? `${body}\n\n> [!note] 资料里没有讲到：${absent.join('；')}。可以问主老师，或在资料库里加一份讲它的资料。` : body
+            }
           } catch (error) {
             failure ??= { error }
             return
           }
           const run = this.runOf(lesson.id)!
-          const marked = run.points.map((point, at) => (at === index ? { ...point, done: true } : point))
-          this.progress(lesson, courseId, { state: 'running', step: 'write', points: marked, draft: draftOf(), message: `正在编写 ${heading}（已完成 ${marked.filter(point => point.done).length}/${points.length} 个要点）` })
+          // 本节概念 is done with its last group.
+          const at = index < 0 ? (conceptBody === undefined ? -1 : 0) : index + (concepts.length ? 1 : 0)
+          const marked = run.points.map((entry, i) => (i === at ? { ...entry, done: true } : entry))
+          this.progress(lesson, courseId, { state: 'running', step: 'write', points: marked, draft: draftOf(), message: `正在编写 ${heading}（已完成 ${marked.filter(entry => entry.done).length}/${parts.length} 部分）` })
         }
       }))
       if (failure) throw failure.error
-      // Written in more than one reply: the recall questions are asked over the whole section.
-      let questions = ''
-      if (!single) {
-        const input = { system: QUESTIONS_SYSTEM, prompt: `# 小节\n${heading}\n\n# 教材正文\n${bodies.join('\n\n')}`, maxTokens: 4000, model: this.config.model.get() }
-        const [reply = ''] = await this.reply(lesson.id, input, async () => [(await complete(this.ctx, { ...input, purpose: 'learning-textbook', signal: this.stopping.signal })).trim()])
-        const text = /读完就答/.test(reply) ? reply.slice(reply.search(/#*\s*读完就答/)).replace(/^#*\s*读完就答/, '### 读完就答') : `### 读完就答\n\n${reply}`
-        questions = finalize(text, { knownChunk: () => false, newBlockId: taken, reuse: piece => unchanged.get(piece)?.shift() }).body.trim()
-      }
 
-      // 4. Each point's explanation, three at a time (a check thinks far longer than a writer). A short section is
-      //    checked whole, so a point may build on what an earlier one explained; a long one gives each point its
-      //    own material and what it cites.
+      // 4. 本节概念 and each point's explanation, three at a time (a check thinks far longer than a writer). A
+      //    short section is checked whole, so a point may build on what an earlier one explained; a long one
+      //    gives each part its own material and what it cites.
       this.progress(lesson, courseId, { state: 'running', step: 'check', message: `正在核对 ${heading} 的讲解`, draft: draftOf() })
-      const checked: CheckOutcome[] = new Array(points.length)
-      const pending = points.map((_, index) => index)
+      const sections = [
+        ...(conceptBody !== undefined ? [{ body: conceptBody, own: ownConcepts as readonly CitedChunk[], supplement: aside }] : []),
+        ...points.map((point, index) => ({ body: bodies[index]!, own: point.chunks, supplement: extra[index]! })),
+      ]
+      const checked: CheckOutcome[] = new Array(sections.length)
+      const pending = sections.map((_, index) => index)
       const deps = this.checkDeps(lesson.id)
       const whole = chunks.reduce((sum, chunk) => sum + chunk.text.length, 0) <= CHECK_WHOLE
       await Promise.all([0, 1, 2].map(async () => {
         for (let index = pending.shift(); index !== undefined; index = pending.shift()) {
-          const { local, web: pages } = extra[index]!
-          const own = points[index]!.chunks
-          const cited = new Set(indexBlocks(bodies[index]!).flatMap(block => block.citations))
+          const { body, own, supplement: { local, web: pages } } = sections[index]!
+          const cited = new Set(indexBlocks(body).flatMap(block => block.citations))
           const material = whole ? chunks : chunks.filter(chunk => own.includes(chunk) || cited.has(chunk.id))
-          checked[index] = await checkPoint(deps, { body: `${bodies[index]!}\n`, chunks: [...material, ...local].map(toCheck).concat(webChunks(pages)), stems })
+          checked[index] = await checkPoint(deps, { body: `${body}\n`, chunks: [...material, ...local].map(toCheck).concat(webChunks(pages)), stems })
         }
       }))
+      const texts = checked.map(outcome => outcome.body.trim())
+      const opening = conceptBody !== undefined ? texts.shift() : undefined
       const joined: CheckOutcome = {
-        body: `${[`## ${heading}`, ...checked.map(outcome => outcome.body.trim()), questions].filter(Boolean).join('\n\n')}\n`,
+        body: `${[`## ${heading}`, opening, '### 知识点', ...texts].filter(Boolean).join('\n\n')}\n`,
         checks: new Map(checked.flatMap(outcome => [...outcome.checks])),
         checked: checked.every(outcome => outcome.checked),
         notes: checked.flatMap(outcome => outcome.notes),
       }
-      // Paragraphs the material contradicts are rewritten against it once before the lesson is published.
-      const outcome = await this.correct(lesson, courseId, [...chunks, ...extra.flatMap(item => item.local)], stems, joined, taken)
+      // Paragraphs the material contradicts, or that copy it, are rewritten once before the lesson is published.
+      const outcome = await this.correct(lesson, courseId, [...chunks, ...supplements.flatMap(item => item.local)], stems, joined, taken)
       const notes = [
         ...outcome.notes,
         ...web.map(page => `联网补充：《${page.title}》（${page.url}）`),
-        ...(planning ? [`列要点没有成功，按小标题分了要点：${planning}`] : []),
+        ...(planning ? [`列要点没有成功，按小标题分了要点，没有写本节概念：${planning}`] : []),
         ...(dropped.length ? [`${dropped.length} 处出处或嵌入无效，已去掉`] : []),
       ]
       const run = this.saveRun({ ...this.runOf(lesson.id)!, step: 'publish', checked: outcome.checked, notes, pending: Object.fromEntries([...outcome.checks].map(([id, check]) => [id, CheckRow.parse({ ...check, sources: [...check.sources] })])) }).run
@@ -931,6 +1033,20 @@ class LearnTextbookService extends Service implements LearnTextbook {
       const label = state?.doubtful ? `${MASTERY[state.state].label}，反复提问过` : MASTERY[state?.state ?? 'untested'].label
       return `- ${node.title}：${label}${state?.explanation ? `（${state.explanation.replace(/。$/, '')}）` : ''}。${how.write}。`
     }).join('\n')
+  }
+
+  /**
+   * Knowledge points of the course outside the lesson that the learner has done on their own: what 本节概念
+   * may liken a concept to (10-31, 联系学员的知识掌握水平). A node's state in this course counts first.
+   */
+  private knownOf(courseId: string, lesson: Lesson, material: readonly CitedChunk[]): string[] {
+    const { nodes, candidates } = this.candidates(courseId, lesson, material.map(chunk => chunk.id), [])
+    const others = nodes.filter(node => !candidates.has(node.id))
+    const titles = new Map(others.map(node => [node.id as string, node.title]))
+    return this.ctx.learnLearner.states(others.map(node => node.id)).filter(state => {
+      const own = state.courses.find(entry => entry.courseId === courseId) ?? state
+      return own.state === 'independent' || own.state === 'retained'
+    }).flatMap(state => titles.get(state.nodeId) ?? []).slice(0, KNOWN_LIMIT)
   }
 
   /** Knowledge points the lesson may explain: the stage's core nodes, those sourced in its material or in `cited`. */
