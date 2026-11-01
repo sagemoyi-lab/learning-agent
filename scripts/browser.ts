@@ -52,6 +52,8 @@ export interface OpenOptions {
    * before calling that a page defect.
    */
   readonly scale?: number
+  /** A phone: touch input and a coarse pointer (`isMobile`, `hasTouch`); pair it with a phone width such as 390. */
+  readonly mobile?: boolean
 }
 
 export interface RunReport {
@@ -116,13 +118,13 @@ function rpcOf(route: Route): { rpcId?: unknown; payload?: unknown } {
 
 /** Open the workbench in headless Chrome. Throws when the page's theme differs from `scheme`. */
 export async function openApp(options: OpenOptions = {}): Promise<App> {
-  const { port = 3182, width = 1440, height = 900, scheme = 'light', run = 'review', allowWrites = false, scale = 1 } = options
+  const { port = 3182, width = 1440, height = 900, scheme = 'light', run = 'review', allowWrites = false, scale = 1, mobile = false } = options
   const out = join(ROOT, '.scratch', 'ui', run)
   mkdirSync(out, { recursive: true })
   // The installed Chrome; LEARNING_CHROME points at another build (e.g. a cloud machine's Chromium).
   const executable = process.env.LEARNING_CHROME
   const browser = await chromium.launch(executable ? { executablePath: executable, headless: true } : { channel: 'chrome', headless: true })
-  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, colorScheme: scheme })
+  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, colorScheme: scheme, isMobile: mobile, hasTouch: mobile })
   const page = await context.newPage()
   const report: RunReport = { errors: [], blocked: [] }
   page.on('pageerror', error => report.errors.push(error.message))

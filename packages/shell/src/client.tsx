@@ -7,7 +7,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import { DockviewReact, type DockviewApi, type DockviewGroupPanel, type DockviewTheme, type IDockviewHeaderActionsProps, type IDockviewPanel, type IDockviewPanelHeaderProps, type IDockviewPanelProps } from 'dockview'
 import {
-  ArrowLeft, ArrowRight, BookOpenText, ChevronRight, Clock, Columns2, CornerDownLeft, ExternalLink, File, GraduationCap, House, Maximize2,
+  ArrowLeft, ArrowRight, BookOpenText, ChevronRight, Clock, Columns2, CornerDownLeft, Ellipsis, ExternalLink, File, GraduationCap, House, Maximize2,
   MessageCircleQuestion, Minimize2, Monitor, Moon, PanelLeftClose, PanelLeftOpen, PanelRightClose, Pin, PinOff, Plus, RotateCw, Search, Sun, SunMoon, X,
 } from 'lucide-react'
 import dockviewCss from 'dockview/dist/styles/dockview.css'
@@ -43,6 +43,10 @@ const PANEL_MAX = 420
 /** Below these window widths the sidebar floats over the page, then the right sidebar too. */
 const PANEL_FLOAT_BELOW = 1180
 const DRAWER_BELOW = 1000
+/** Below this the window is a phone: a bottom navigation bar, no tab strip, sidebars over the whole page. */
+const PHONE_BELOW = 600
+/** Room each button of the phone's bottom bar takes. */
+const NAV_SLOT = 60
 /** Narrowest a split-view column may get before the sidebar floats, then the right sidebar. */
 const MIN_COLUMN = 360
 const SIDE_MIN = 300
@@ -223,12 +227,18 @@ class ShellState {
     return this.sideWidths[this.sideView]
   }
 
+  get phone(): boolean {
+    return this.viewport < PHONE_BELOW
+  }
+
   /**
    * A rail button. Without a panel it opens its page. With the sidebar showing it shows its panel there, or folds
    * the sidebar when that panel already shows. With the sidebar folded by the learner it opens its page and the
    * sidebar stays folded; pressing the button of the page in front unfolds it.
    */
   pressActivity(item: ActivityItem): void {
+    // On a phone the right sidebar covers the page: going somewhere else puts it away.
+    if (this.phone && this.side) this.update({ side: false })
     if (!item.panel) {
       this.open(item.page, {}, { title: item.title })
       return
@@ -246,6 +256,12 @@ class ShellState {
   /** The activity of the page in the active tab. */
   currentActivity(): ActivityItem | undefined {
     return this.active ? this.activityFor(this.active.page) : undefined
+  }
+
+  /** 提问 beside the tabs: the side chat (a floating sidebar folds), or put away the right sidebar showing it. */
+  toggleChat(): void {
+    const chat = this.side && this.sideView === 'chat'
+    this.update(chat ? { side: false } : { side: true, sideView: 'chat', peek: false })
   }
 
   /** 展开侧栏: the panel of the page in front when it has one, else the one last shown. */
@@ -335,7 +351,9 @@ class ShellState {
         this.update({ side: true, sideView: 'page', sidePage: this.entry(page, params, title) })
         return
       }
-      if (this.peek) this.update({ peek: false })
+      // A page opening in a tab is the one to see: a floating sidebar folds, and on a phone the right sidebar goes.
+      const covered = this.phone && this.side
+      if (this.peek || covered) this.update(covered ? { peek: false, side: false } : { peek: false })
       if (where === 'current' && active && tab) {
         if (samePlace(current(tab), page, params)) active.api.setActive()
         else this.setTab(active, navigate(tab, this.entry(page, params, title)))
@@ -551,7 +569,7 @@ export function apply(ctx: ClientContext): void {
       })
     },
     showSideChat() {
-      if (!state.side || state.sideView !== 'chat') state.update({ side: true, sideView: 'chat' })
+      if (!state.side || state.sideView !== 'chat') state.update({ side: true, sideView: 'chat', peek: false })
     },
     scope: () => state.scope,
     enterCourse(courseId) {
@@ -787,14 +805,14 @@ function Frame(): ReactNode {
   const panel = state.panelShown ? state.panelItem() : undefined
   const floats = state.panelFloats
   return (
-    <div className="la-app" data-panel={panel ? (floats ? 'float' : 'docked') : 'closed'} data-side={state.side ? 'open' : 'closed'}
+    <div className="la-app" data-layout={state.phone ? 'phone' : undefined} data-panel={panel ? (floats ? 'float' : 'docked') : 'closed'} data-side={state.side ? 'open' : 'closed'}
       data-side-mode={state.drawer ? 'drawer' : 'column'}
       style={{ ['--la-side-w' as string]: `${state.sideWidth}px`, ['--la-panel-w' as string]: `${state.panelWidth}px` }}
       onMouseDown={event => {
-        // A floating sidebar folds on a click anywhere outside it and the rail.
-        if (state.peek && !(event.target as Element).closest('.la-panel, .la-rail')) state.update({ peek: false })
+        // A floating sidebar folds on a click anywhere outside it and the rail (the bottom bar on a phone).
+        if (state.peek && !(event.target as Element).closest('.la-panel, .la-rail, .la-navbar')) state.update({ peek: false })
       }}>
-      <Rail />
+      {state.phone ? <NavBar /> : <Rail />}
       {panel?.panel && <Panel item={panel} panel={panel.panel} />}
       <main className="la-main">
         <DockviewReact
@@ -820,28 +838,13 @@ function Frame(): ReactNode {
 function Rail(): ReactNode {
   const state = useShellState()
   const theme = useContext(ThemeContext)!
-  const scope = state.scope
   const course = state.course()
   const current = state.currentActivity()
   const open = state.panelShown ? state.panelItem() : undefined
   const folded = state.folded && !state.panelFloats
-  const switcher: MenuEntry[] = [
-    { key: 'home', label: '主界面', icon: House, hint: '全部课程与资料库', checked: scope.kind === 'main', onSelect: () => { if (scope.kind !== 'main') state.switchScope({ kind: 'main' }) } },
-    ...(state.courses.length ? [{ heading: '课程' } as const] : []),
-    ...state.courses.map(item => ({
-      key: item.id, label: item.title, icon: GraduationCap, checked: scope.kind === 'course' && scope.courseId === item.id,
-      onSelect: () => { if (!(scope.kind === 'course' && scope.courseId === item.id)) state.switchScope({ kind: 'course', courseId: item.id }) },
-    })),
-    'divider',
-    { key: 'new', label: '新建课程', icon: Plus, onSelect: () => { if (scope.kind !== 'main') state.switchScope({ kind: 'main' }); state.open('planner.home', {}, { title: '首页' }) } },
-  ]
+  const switcher = switcherEntries(state)
   const themeIcon = state.themePreference === 'dark' ? Moon : state.themePreference === 'light' ? Sun : SunMoon
-  const themes: MenuEntry[] = [
-    { heading: '外观' },
-    { key: 'system', label: '跟随系统', icon: Monitor, checked: (state.themePreference ?? 'system') === 'system', onSelect: () => theme.set('system') },
-    { key: 'light', label: '浅色', icon: Sun, checked: state.themePreference === 'light', onSelect: () => theme.set('light') },
-    { key: 'dark', label: '深色', icon: Moon, checked: state.themePreference === 'dark', onSelect: () => theme.set('dark') },
-  ]
+  const themes = themeEntries(state, theme)
   const button = (item: ActivityItem) => {
     const badge = state.badges.get(item.id)
     const pressed = item.panel ? open?.id === item.id : undefined
@@ -873,6 +876,88 @@ function Rail(): ReactNode {
         )} />
         {state.footActivities().map(button)}
       </div>
+    </nav>
+  )
+}
+
+/** The course switcher's menu: the main interface, each course, and 新建课程. */
+function switcherEntries(state: ShellState): MenuEntry[] {
+  const scope = state.scope
+  return [
+    { key: 'home', label: '主界面', icon: House, hint: '全部课程与资料库', checked: scope.kind === 'main', onSelect: () => { if (scope.kind !== 'main') state.switchScope({ kind: 'main' }) } },
+    ...(state.courses.length ? [{ heading: '课程' } as const] : []),
+    ...state.courses.map(item => ({
+      key: item.id, label: item.title, icon: GraduationCap, checked: scope.kind === 'course' && scope.courseId === item.id,
+      onSelect: () => { if (!(scope.kind === 'course' && scope.courseId === item.id)) state.switchScope({ kind: 'course', courseId: item.id }) },
+    })),
+    'divider',
+    { key: 'new', label: '新建课程', icon: Plus, onSelect: () => { if (scope.kind !== 'main') state.switchScope({ kind: 'main' }); state.open('planner.home', {}, { title: '首页' }) } },
+  ]
+}
+
+function themeEntries(state: ShellState, theme: { set(preference: ThemePreference): void }): MenuEntry[] {
+  return [
+    { heading: '外观' },
+    { key: 'system', label: '跟随系统', icon: Monitor, checked: (state.themePreference ?? 'system') === 'system', onSelect: () => theme.set('system') },
+    { key: 'light', label: '浅色', icon: Sun, checked: state.themePreference === 'light', onSelect: () => theme.set('light') },
+    { key: 'dark', label: '深色', icon: Moon, checked: state.themePreference === 'dark', onSelect: () => theme.set('dark') },
+  ]
+}
+
+/**
+ * A phone's bottom bar in place of the rail: the course switcher, the activities that fit, then 更多 with the rest,
+ * the foot activities and 外观. Each button names itself under its icon: a finger cannot hover for the name.
+ */
+function NavBar(): ReactNode {
+  const state = useShellState()
+  const theme = useContext(ThemeContext)!
+  const course = state.course()
+  const current = state.currentActivity()
+  const open = state.panelShown ? state.panelItem() : undefined
+  const activities = state.visibleActivities()
+  // The switcher and 更多 take two of the slots that fit across.
+  const fit = Math.max(3, Math.floor(state.viewport / NAV_SLOT) - 2)
+  const hidden = activities.slice(fit)
+  const waiting = hidden.some(item => state.badges.get(item.id))
+  const entry = (item: ActivityItem): MenuEntry => {
+    const badge = state.badges.get(item.id)
+    return { key: item.id, label: item.title, icon: item.icon, hint: badge ? `${badge} 项待处理` : undefined, onSelect: () => state.pressActivity(item) }
+  }
+  const more: MenuEntry[] = [
+    ...hidden.map(entry),
+    ...(hidden.length ? ['divider' as const] : []),
+    ...state.footActivities().map(entry),
+    'divider',
+    ...themeEntries(state, theme),
+  ]
+  return (
+    <nav className="la-navbar" aria-label="导航">
+      <Menu entries={switcherEntries(state)} width={260} trigger={props => (
+        <button type="button" className="la-nav-btn" title={course ? `${course.title} · 切换课程` : '主界面 · 切换课程'} {...props}>
+          <span className="la-nav-icon"><span className={`la-nav-switcher${course ? '' : ' home'}`}>{course ? Array.from(course.title)[0] : <House size={16} strokeWidth={1.75} />}</span></span>
+          <span className="la-nav-label">{course ? '课程' : '主界面'}</span>
+        </button>
+      )} />
+      {activities.slice(0, fit).map(item => {
+        const badge = state.badges.get(item.id)
+        return (
+          <button key={item.id} type="button" className={`la-nav-btn${open?.id === item.id ? ' is-open' : ''}${current?.id === item.id ? ' is-current' : ''}`}
+            aria-pressed={item.panel ? open?.id === item.id : undefined} aria-current={current?.id === item.id ? 'page' : undefined}
+            data-activity={item.id} onClick={() => state.pressActivity(item)}>
+            <span className="la-nav-icon">
+              <item.icon size={20} strokeWidth={1.75} />
+              {badge ? <span className="la-rail-badge" aria-label={`${badge} 项待处理`}>{badge}</span> : null}
+            </span>
+            <span className="la-nav-label">{item.title}</span>
+          </button>
+        )
+      })}
+      <Menu entries={more} align="end" width={220} trigger={props => (
+        <button type="button" className="la-nav-btn" {...props}>
+          <span className="la-nav-icon"><Ellipsis size={20} strokeWidth={1.75} />{waiting && <span className="la-nav-dot" aria-label="有待处理" />}</span>
+          <span className="la-nav-label">更多</span>
+        </button>
+      )} />
     </nav>
   )
 }
@@ -991,6 +1076,8 @@ function RightSide(): ReactNode {
 function StatusBar(): ReactNode {
   const state = useShellState()
   const renderSlot = useContext(RenderSlot)
+  // A phone has no room for the units' statuses (the progress page and the badges carry them): only a broken feed shows.
+  if (state.phone) return state.feed === 'open' ? null : <footer className="la-status"><span className="la-status-item"><span className={`la-dot ${state.feed === 'error' ? 'bad' : ''}`} />{state.feed === 'error' ? '推送断开，正在重连…' : '正在连接推送…'}</span></footer>
   return (
     <footer className="la-status">
       {renderSlot?.('learning.status', { scope: state.scope }, {})}
@@ -1110,7 +1197,7 @@ function GroupActions({ group, containerApi }: IDockviewHeaderActionsProps): Rea
       </button>
       {/* On the main interface the side chat asks which course the question is about. */}
       <button type="button" className={`la-toggle${chat ? ' is-on' : ''}`} aria-pressed={chat} title="侧边提问：针对选中的内容提问，不打断主老师"
-        onClick={() => state.update(chat ? { side: false } : { side: true, sideView: 'chat' })}>
+        onClick={() => state.toggleChat()}>
         <MessageCircleQuestion {...ICON} /><span>提问</span>
       </button>
     </div>
@@ -1175,7 +1262,7 @@ function ViewHeader({ id, tab, group, containerApi }: { id: string; tab: Tab; gr
         {activity && <><ChevronRight size={13} strokeWidth={1.75} className="la-crumb-sep" /><span className="la-crumb">{activity.title}</span></>}
         {entry.title !== activity?.title && <><ChevronRight size={13} strokeWidth={1.75} className="la-crumb-sep" /><span className="la-crumb la-crumb-current">{entry.title}</span></>}
       </nav>
-      <div className="la-view-actions">
+      {state.phone ? <PhoneActions id={id} containerApi={containerApi} /> : <div className="la-view-actions">
         <button type="button" className="la-icon-btn" aria-label="刷新这个页面" title="刷新这个页面" onClick={() => state.reload(id)}><RotateCw size={14} strokeWidth={1.75} /></button>
         <button type="button" className="la-icon-btn" aria-label="在右侧分屏打开" title="在右侧分屏打开" onClick={() => state.splitRight(id)}><Columns2 size={15} strokeWidth={1.75} /></button>
         {(several || maximized) && (
@@ -1184,7 +1271,51 @@ function ViewHeader({ id, tab, group, containerApi }: { id: string; tab: Tab; gr
             {maximized ? <Minimize2 size={15} strokeWidth={1.75} /> : <Maximize2 size={15} strokeWidth={1.75} />}
           </button>
         )}
-      </div>
+      </div>}
+    </div>
+  )
+}
+
+/**
+ * A phone has no tab strip: the top row of a tab carries search, 提问 and the tab count, which lists the tabs to
+ * switch to and the tab actions (Obsidian's phone app does the same).
+ */
+function PhoneActions({ id, containerApi }: { id: string; containerApi: DockviewApi }): ReactNode {
+  const state = useShellState()
+  const chat = state.side && state.sideView === 'chat'
+  const panel = containerApi.getPanel(id)
+  const pinned = Boolean(tabOf(panel)?.pinned)
+  const count = containerApi.panels.length
+  // Columns split on a wider window stay squeezed side by side: one of them can fill the screen.
+  const maximized = panel?.group.api.isMaximized() ?? false
+  const tabs: MenuEntry[] = [
+    { heading: '标签页' },
+    ...containerApi.panels.map(item => {
+      const tab = tabOf(item)
+      return { key: item.id, label: item.title ?? '', icon: iconOf(state, tab ? current(tab).page : ''), checked: item.id === id, hint: tab?.pinned ? '已固定' : undefined, onSelect: () => item.api.setActive() }
+    }),
+    'divider',
+    { key: 'new', label: '新标签页', icon: Plus, onSelect: () => state.newTab(panel?.group) },
+    { key: 'reload', label: '刷新这个页面', icon: RotateCw, onSelect: () => state.reload(id) },
+    { key: 'pin', label: pinned ? '取消固定' : '固定标签', icon: pinned ? PinOff : Pin, onSelect: () => state.pin(id, !pinned) },
+    { key: 'close', label: '关闭这个标签', icon: X, onSelect: () => panel?.api.close() },
+    { key: 'others', label: '关闭其他标签', hint: '固定的标签留下', disabled: count < 2, onSelect: () => state.closeOthers(id) },
+    ...(containerApi.groups.length > 1 || maximized ? [{
+      key: 'only', label: maximized ? '恢复分屏' : '只看这一栏', icon: maximized ? Minimize2 : Maximize2,
+      onSelect: () => (maximized ? panel?.group.api.exitMaximized() : panel?.group.api.maximize()),
+    }] : []),
+  ]
+  return (
+    <div className="la-view-actions la-phone-actions">
+      <button type="button" className="la-icon-btn" aria-label="搜索与跳转" title="搜索与跳转" onClick={() => state.update({ palette: true })}><Search {...ICON} size={18} /></button>
+      <button type="button" className={`la-icon-btn${chat ? ' is-on' : ''}`} aria-pressed={chat} aria-label="侧边提问" title="侧边提问：针对选中的内容提问，不打断主老师" onClick={() => state.toggleChat()}>
+        <MessageCircleQuestion {...ICON} size={18} />
+      </button>
+      <Menu entries={tabs} align="end" width={240} trigger={props => (
+        <button type="button" className="la-icon-btn" aria-label={`标签页（${count} 个）`} title="标签页" {...props}>
+          <span className="la-tabs-count">{count}</span>
+        </button>
+      )} />
     </div>
   )
 }

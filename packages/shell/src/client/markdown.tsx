@@ -2,7 +2,7 @@
 // Textbook mode follows contracts §3.2: a paragraph ending in ` ^id` (or followed by a line `^id`)
 // is one block; `[label](cite:ck_…)` links are source badges, previewed on hover; `cite:unverified` is
 // flagged; `![caption](cite:ck_…)` is a figure the page draws; `> [!quote]` boxes hold source text.
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes, type MouseEvent, type ReactNode, type RefObject } from 'react'
 import ReactDOM from 'react-dom'
 import type { MarkdownProps } from '@learning-agent/contracts/client'
 import { toHtml, toInlineHtml } from './html.ts'
@@ -76,6 +76,37 @@ export function splitBlocks(text: string): Piece[] {
   return pieces
 }
 
+/** How long a touch selection rests before it counts as made (the learner may still be dragging its handles). */
+const TOUCH_SELECTION_MS = 400
+
+/**
+ * Selecting with a finger (a long press, then the handles) never sends a mouseup: on a coarse pointer, a selection
+ * that starts inside `container` is reported once it rests. Taps still send mouseups, which clear it as with a mouse.
+ */
+function useTouchSelection(container: RefObject<HTMLElement | null>, report: ((element: HTMLElement) => void) | undefined): void {
+  const latest = useRef(report)
+  latest.current = report
+  const listening = Boolean(report)
+  useEffect(() => {
+    if (!listening || !window.matchMedia('(pointer: coarse)').matches) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const changed = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        const selection = window.getSelection()
+        const element = container.current
+        if (!selection || selection.isCollapsed || !element || !selection.anchorNode || !element.contains(selection.anchorNode)) return
+        latest.current?.(element)
+      }, TOUCH_SELECTION_MS)
+    }
+    document.addEventListener('selectionchange', changed)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('selectionchange', changed)
+    }
+  }, [listening])
+}
+
 function citeTarget(event: MouseEvent): string | undefined {
   const element = (event.target as HTMLElement).closest('[data-cite]')
   return element?.getAttribute('data-cite') ?? undefined
@@ -85,6 +116,25 @@ export function Markdown({ text, inline, blocks, selectedBlock, onCite, onQuote,
   const pieces = useMemo(() => (blocks ? splitBlocks(text) : undefined), [text, blocks])
   const html = useMemo(() => (blocks ? '' : inline ? toInlineHtml(text) : toHtml(text)), [text, blocks, inline])
   const hover = useCitePreview(preview)
+  const container = useRef<HTMLDivElement>(null)
+  // The learner let go of the mouse (or the keys that extend a selection): what is selected here now, if anything.
+  const quoted = onQuote ? (element: HTMLElement) => onQuote(selectedQuote(element, window.getSelection())) : undefined
+  // Textbook mode with `onSelect`: a selection inside one block is reported with its place on the screen.
+  const report = onSelect && pieces ? (element: HTMLElement) => {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) { onSelect(undefined); return }
+    const range = selection.getRangeAt(0)
+    const start = range.startContainer.nodeType === 1 ? range.startContainer as Element : range.startContainer.parentElement
+    const block = start?.closest('[data-block]')
+    if (!block || !element.contains(block)) { onSelect(undefined); return }
+    const quote = selectedQuote(block, selection)
+    const id = block.getAttribute('data-block')!
+    const piece = pieces.find(item => item.id === id)
+    if (!quote || !piece) { onSelect(undefined); return }
+    const box = range.getBoundingClientRect()
+    onSelect({ blockId: id, text: piece.source, quote, rect: { top: box.top, left: box.left, right: box.right, bottom: box.bottom } })
+  } : undefined
+  useTouchSelection(container, pieces ? report : inline ? undefined : quoted)
 
   const handleCite = (event: MouseEvent): boolean => {
     const cite = citeTarget(event)
@@ -98,29 +148,13 @@ export function Markdown({ text, inline, blocks, selectedBlock, onCite, onQuote,
 
   if (!pieces) {
     if (inline) return <><span className="la-md-inline" onClick={handleCite} {...hover.handlers} dangerouslySetInnerHTML={{ __html: html }} />{hover.card}</>
-    // The learner let go of the mouse (or the keys that extend a selection): what is selected here now, if anything.
-    const quoted = onQuote ? (event: { currentTarget: HTMLDivElement }) => onQuote(selectedQuote(event.currentTarget, window.getSelection())) : undefined
-    return <><Html key={html} html={html} figure={figure} className="la-md" onClick={handleCite} onMouseUp={quoted} onKeyUp={quoted} {...hover.handlers} />{hover.card}</>
+    const up = quoted ? (event: { currentTarget: HTMLDivElement }) => quoted(event.currentTarget) : undefined
+    return <><Html key={html} html={html} figure={figure} outer={container} className="la-md" onClick={handleCite} onMouseUp={up} onKeyUp={up} {...hover.handlers} />{hover.card}</>
   }
 
-  // Textbook mode with `onSelect`: a selection inside one block is reported with its place on the screen.
-  const report = (event: { currentTarget: HTMLDivElement }) => {
-    if (!onSelect) return
-    const selection = window.getSelection()
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0) { onSelect(undefined); return }
-    const range = selection.getRangeAt(0)
-    const start = range.startContainer.nodeType === 1 ? range.startContainer as Element : range.startContainer.parentElement
-    const block = start?.closest('[data-block]')
-    if (!block || !event.currentTarget.contains(block)) { onSelect(undefined); return }
-    const quote = selectedQuote(block, selection)
-    const id = block.getAttribute('data-block')!
-    const piece = pieces.find(item => item.id === id)
-    if (!quote || !piece) { onSelect(undefined); return }
-    const box = range.getBoundingClientRect()
-    onSelect({ blockId: id, text: piece.source, quote, rect: { top: box.top, left: box.left, right: box.right, bottom: box.bottom } })
-  }
+  const up = report ? (event: { currentTarget: HTMLDivElement }) => report(event.currentTarget) : undefined
   return (
-    <div className="la-md la-textbook" onClick={handleCite} onMouseUp={onSelect ? report : undefined} onKeyUp={onSelect ? report : undefined} {...hover.handlers}>
+    <div ref={container} className="la-md la-textbook" onClick={handleCite} onMouseUp={up} onKeyUp={up} {...hover.handlers}>
       {pieces.map((piece, index) => (
         <Fragment key={piece.id ?? `p${index}`}>
           <MarkdownPiece
@@ -147,8 +181,9 @@ function MarkdownPiece({ piece, selected, extra, figure }: { piece: Piece; selec
  * Rendered HTML whose figures (`[data-figure]`) the page draws inside it. Keyed by its HTML: new text is a new
  * element, so the figures drawn into the old one go with it.
  */
-function Html({ html, figure, ...rest }: { html: string; figure: Props['figure'] } & HTMLAttributes<HTMLDivElement> & { 'data-block'?: string }): ReactNode {
-  const ref = useRef<HTMLDivElement>(null)
+function Html({ html, figure, outer, ...rest }: { html: string; figure: Props['figure']; outer?: RefObject<HTMLDivElement> } & HTMLAttributes<HTMLDivElement> & { 'data-block'?: string }): ReactNode {
+  const own = useRef<HTMLDivElement>(null)
+  const ref = outer ?? own
   const [spots, setSpots] = useState<{ element: Element; chunkId: string }[]>([])
   const drawing = Boolean(figure)
   useLayoutEffect(() => {

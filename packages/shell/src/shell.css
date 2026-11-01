@@ -323,12 +323,6 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 /* ── main: the tab area ── */
 .la-main { grid-area: main; min-width: 0; min-height: 0; background: var(--la-bg); container: center / inline-size; }
 .la-main > .la-dock { height: 100%; }
-@container center (max-width: 640px) {
-  .la-command { width: 32px; padding: 0; justify-content: center; }
-  .la-command span, .la-command .la-kbd, .la-toggle span { display: none; }
-  .la-toggle { width: 32px; padding: 0; justify-content: center; }
-  .la-view-actions .la-icon-btn:not(:first-child) { display: none; }
-}
 .la-command {
   flex: none; width: 150px; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 10px;
   border: 1px solid var(--la-line); border-radius: 9px; background: var(--la-bg-raised); color: var(--la-text-3); font-size: var(--la-fs-sm); cursor: pointer;
@@ -345,6 +339,13 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 .la-toggle:focus-visible { box-shadow: var(--la-ring); }
 .la-toggle.is-on { background: var(--la-bg-raised); border-color: var(--la-line); color: var(--la-text); box-shadow: var(--la-shadow-xs); }
 .la-toggle.is-on svg { color: var(--la-accent-text); }
+/* After the rules above, which it narrows (same specificity). */
+@container center (max-width: 640px) {
+  .la-command { width: 32px; padding: 0; justify-content: center; }
+  .la-command span, .la-command .la-kbd, .la-toggle span { display: none; }
+  .la-toggle { width: 32px; padding: 0; justify-content: center; }
+  .la-view-actions:not(.la-phone-actions) .la-icon-btn:not(:first-child) { display: none; }
+}
 
 /* dockview, themed as the workbench's tab strip */
 .la-dock {
@@ -472,6 +473,84 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 
 .la-context-menu { position: fixed; z-index: 120; }
 
+/* ── phone: a window narrower than 600px (data-layout='phone', set by the shell from the window width). The rail
+   becomes a bottom bar, the tab strip gives way to each tab's top row, both sidebars cover the page, and controls
+   grow to finger size; inputs use 16px so iOS does not zoom in on them. ── */
+.la-app[data-layout='phone'] {
+  --la-control: 40px;
+  --la-control-sm: 36px;
+  --la-nav-h: calc(56px + env(safe-area-inset-bottom, 0px));
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto var(--la-nav-h);
+  grid-template-areas: 'main' 'status' 'nav';
+}
+.la-app[data-layout='phone'] .la-dock .dv-tabs-and-actions-container { display: none; }
+.la-app[data-layout='phone'] .la-status { min-height: var(--la-status-h); }
+.la-app[data-layout='phone'][data-panel='float'] .la-panel {
+  grid-area: auto; bottom: var(--la-nav-h); left: 0; width: min(360px, calc(100vw - 48px));
+}
+.la-app[data-layout='phone'][data-side-mode='drawer'] .la-side {
+  grid-area: auto; bottom: var(--la-nav-h); left: 0; width: auto; border-left: 0; box-shadow: none;
+}
+.la-app[data-layout='phone'] .la-view-head { height: 48px; gap: 0; padding: 0 4px; background: var(--la-bg-chrome); border-bottom-color: var(--la-line); }
+.la-app[data-layout='phone'] .la-icon-btn { min-width: 36px; height: 36px; border-radius: 9px; }
+.la-app[data-layout='phone'] .la-view-head .la-icon-btn { min-width: 40px; height: 40px; color: var(--la-text-2); }
+.la-app[data-layout='phone'] .la-view-head .la-icon-btn:disabled { color: var(--la-text-3); }
+.la-app[data-layout='phone'] .la-icon-btn.is-on { background: var(--la-accent-soft); color: var(--la-accent-text); }
+.la-app[data-layout='phone'] .la-crumbs { margin-left: 2px; font-size: var(--la-fs-md); }
+.la-app[data-layout='phone'] .la-crumbs > :not(:last-child) { display: none; }
+.la-app[data-layout='phone'] .la-crumbs > :last-child { max-width: none; color: var(--la-text); font-weight: 500; }
+.la-tabs-count {
+  display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border: 1.5px solid currentColor; border-radius: 6px;
+  font: 600 var(--la-fs-2xs)/1 var(--la-font); font-variant-numeric: tabular-nums;
+}
+.la-app[data-layout='phone'] :is(.la-tree-item, .la-tree-stage) { min-height: 38px; }
+.la-app[data-layout='phone'] .la-lib-chevron { width: 24px; height: 38px; }
+.la-app[data-layout='phone'] .la-menu-item { min-height: 40px; }
+.la-app[data-layout='phone'] .la-side-view { height: 34px; }
+.la-app[data-layout='phone'] .la-palette-scrim { padding-top: 8px; }
+.la-app[data-layout='phone'] .la-palette { width: calc(100vw - 16px); max-height: min(560px, 70dvh); }
+.la-app[data-layout='phone'] .la-palette-item { height: 44px; }
+.la-app[data-layout='phone'] :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']), textarea, select) { font-size: var(--la-fs-xl); }
+/* Keyboard hints mean nothing to a finger. */
+@media (pointer: coarse) {
+  .la-app .la-palette-foot, .la-app .la-palette-input .la-kbd { display: none; }
+}
+
+/* the phone's bottom bar: the course switcher, the activities that fit, 更多; each with its name under the icon */
+.la-navbar {
+  grid-area: nav; display: flex; align-items: stretch; padding: 0 4px env(safe-area-inset-bottom, 0px);
+  background: var(--la-bg-chrome); border-top: 1px solid var(--la-line);
+}
+.la-navbar > .la-menu { flex: 1 1 0; display: flex; }
+.la-nav-btn {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 2px;
+  border: 0; background: transparent; color: var(--la-text-3); font: 500 var(--la-fs-2xs)/1.3 var(--la-font); cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.la-navbar > .la-menu > .la-nav-btn { width: 100%; }
+.la-nav-icon {
+  position: relative; display: grid; place-items: center; width: 48px; height: 30px; border-radius: 15px;
+  transition: background-color 0.1s, color 0.1s;
+}
+.la-nav-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.la-nav-btn.is-current { color: var(--la-accent-text); }
+.la-nav-btn.is-open .la-nav-icon, .la-nav-btn[aria-expanded='true'] .la-nav-icon { background: var(--la-press); }
+.la-nav-btn.is-open:not(.is-current) { color: var(--la-text); }
+.la-nav-btn:focus-visible { box-shadow: none; }
+.la-nav-btn:focus-visible .la-nav-icon { box-shadow: var(--la-ring); }
+@media (hover: hover) { .la-nav-btn:hover .la-nav-icon { background: var(--la-hover); } }
+.la-nav-icon .la-rail-badge { top: -2px; right: 4px; }
+.la-nav-dot {
+  position: absolute; top: 3px; right: 11px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--la-accent); box-shadow: 0 0 0 2px var(--la-bg-chrome);
+}
+.la-nav-switcher {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  background: var(--la-accent-soft-2); color: var(--la-accent-text); font: 600 var(--la-fs-md)/1 var(--la-font);
+}
+.la-nav-switcher.home { background: var(--la-bg-raised); color: var(--la-text-2); box-shadow: var(--la-shadow-xs), 0 0 0 1px var(--la-line); }
+
 /* ── status bar ── */
 .la-status {
   grid-area: status;
@@ -535,7 +614,7 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 .la-page-desc { margin: 6px 0 0; color: var(--la-text-2); font-size: var(--la-fs-md); line-height: 1.6; max-width: 68ch; }
 .la-page-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .la-page-actions { flex: none; display: flex; align-items: center; gap: 8px; padding-top: 2px; }
-@container (max-width: 560px) { .la-page-header { flex-direction: column; } .la-page-actions { padding-top: 0; } }
+@container (max-width: 560px) { .la-page-header { flex-direction: column; } .la-page-actions { align-self: stretch; flex-wrap: wrap; padding-top: 0; } }
 
 .la-section + .la-section { margin-top: 32px; }
 /* Inside a stack the gap spaces sections (slot lists wrap them in display: contents). */
@@ -764,6 +843,8 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 .la-field-label { font-size: var(--la-fs-sm); font-weight: 500; color: var(--la-text-2); }
 .la-field-hint { font-size: var(--la-fs-xs); color: var(--la-text-3); }
 
+/* A control given a fixed width still fits a narrower column (max-width wins over the inline width). */
+.la-field-box, .la-select, .la-number { max-width: 100%; }
 .la-field-box {
   position: relative; display: flex; align-items: center; width: 100%; min-height: var(--la-control);
   border: 1px solid var(--la-line-strong); border-radius: var(--la-radius); background: var(--la-bg-raised); color: var(--la-text);
@@ -1188,6 +1269,10 @@ details.la-quote-box:not([open]) { padding-bottom: 8px; }
 
 .la-composer-wrap { flex: none; max-width: 800px; width: 100%; margin: 0 auto; padding: 0 32px 18px; }
 .la-chat.compact .la-composer-wrap { padding: 0 12px 12px; }
+@container (max-width: 560px) {
+  .la-chat-list { padding: 18px 16px 14px; }
+  .la-composer-wrap { padding: 0 12px 12px; }
+}
 .la-composer {
   border: 1px solid var(--la-line-strong); border-radius: 16px; background: var(--la-bg-raised); box-shadow: var(--la-shadow-md);
   transition: border-color 0.12s, box-shadow 0.12s;
@@ -1222,7 +1307,12 @@ details.la-quote-box:not([open]) { padding-bottom: 8px; }
 .la-hero-kicker { color: var(--la-accent-text); font-size: var(--la-fs-xs); font-weight: 500; }
 .la-hero-title { margin-top: 2px; font-size: var(--la-fs-2xl); font-weight: 600; line-height: 1.4; }
 .la-hero-detail { margin-top: 3px; color: var(--la-text-2); font-size: var(--la-fs-sm); }
-@container (max-width: 560px) { .la-hero { flex-wrap: wrap; } }
+/* Narrow: the button goes under the text, in line with it. */
+@container (max-width: 560px) {
+  .la-hero { flex-wrap: wrap; row-gap: 14px; }
+  .la-hero-body { flex-basis: calc(100% - 62px); }
+  .la-hero > .la-btn { margin-left: 62px; }
+}
 
 .la-course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
 .la-course-card { display: flex; flex-direction: column; gap: 12px; min-height: 150px; padding: 16px 18px; text-align: left; font: inherit; color: inherit; }
@@ -1414,6 +1504,7 @@ details.la-quote-box:not([open]) { padding-bottom: 8px; }
 .la-node-desc { color: var(--la-text-2); font-size: var(--la-fs-sm); line-height: 1.6; }
 .la-node-state { display: flex; align-items: center; gap: 6px; font-size: var(--la-fs-xs); color: var(--la-text-2); }
 .la-node-next { display: flex; gap: 8px; margin: 4px 0 0; font-size: var(--la-fs-sm); }
+.la-node-next > .la-faint { flex: none; }
 .la-edge { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 
 /* ── library ── */
@@ -1488,9 +1579,11 @@ details.la-quote-box:not([open]) { padding-bottom: 8px; }
   .la-settings-nav { position: static; display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
   .la-settings-tab { flex: none; height: 32px; }
 }
+/* A phone column: the sections wrap instead of scrolling out of sight. */
+@container (max-width: 560px) { .la-settings-nav { flex-wrap: wrap; overflow-x: visible; } }
 
 /* A group of settings: rows separated by thin lines inside one card. */
-.la-settings-card { display: grid; padding: 4px 18px; border: 1px solid var(--la-line); border-radius: 12px; background: var(--la-bg-raised); }
+.la-settings-card { display: grid; grid-template-columns: minmax(0, 1fr); padding: 4px 18px; border: 1px solid var(--la-line); border-radius: 12px; background: var(--la-bg-raised); }
 .la-setting { display: flex; align-items: flex-start; gap: 24px; padding: 14px 0; }
 .la-setting + .la-setting { border-top: 1px solid var(--la-line); }
 .la-setting-text { flex: 1; min-width: 0; padding-top: 5px; }
@@ -1503,6 +1596,7 @@ details.la-quote-box:not([open]) { padding-bottom: 8px; }
 @container (max-width: 640px) {
   .la-setting { flex-direction: column; gap: 10px; }
   .la-setting-control, .la-setting-control .la-secret { max-width: 100%; justify-items: start; }
+  .la-setting-control .la-row.nowrap { flex-wrap: wrap; }
 }
 
 /* Model services and adding one. */

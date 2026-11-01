@@ -314,9 +314,10 @@ function Reader({ courseId, lessonId, renderSlot }: { courseId: string; lessonId
     }
     mine.current = picked
     shell.select(picked)
-    // Above the selection unless that is out of sight, under the tabs.
+    // Above the selection unless that is out of sight, under the tabs. With a finger, below: the system's copy menu
+    // sits above a touch selection.
     const visible = body.current?.closest('.la-page')?.getBoundingClientRect().top ?? column.top
-    const above = pick.rect.top - 46 >= Math.max(visible, column.top)
+    const above = !window.matchMedia('(pointer: coarse)').matches && pick.rect.top - 46 >= Math.max(visible, column.top)
     setPlace({ pick, top: above ? pick.rect.top - column.top - 46 : pick.rect.bottom - column.top + 8, right: Math.max(0, column.right - pick.rect.right - 8) })
   }
   const shown = running && status.draft ? status.draft : data.text
