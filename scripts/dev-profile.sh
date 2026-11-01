@@ -1,12 +1,13 @@
 #!/usr/bin/env sh
 # Install (or refresh) the `learning` DSH profile and link our workspace packages into it.
-# Run from the repo root after `pnpm build`:   sh scripts/dev-profile.sh
-# Then start DSH from a directory without .env (see docs/history/2026-10-compatibility.md V0):
+# Run from the repo root after `sh scripts/setup-dsh.sh` and `pnpm build`:   sh scripts/dev-profile.sh
+# Then start DSH from a directory without .env (see docs/development.md):
 #   . .tools/dsh-env.sh && cd .dsh-home/work && dsh learning --no-open --port 3180
 #
 # The workbench is the @learning-agent/app bundle. The profile's own package.json (bundle selection)
 # and cordis.patch.yml (settings saved from the settings page) belong to the learner: profile/ only
-# seeds them when missing, and this script never overwrites them.
+# seeds them when missing, and this script never overwrites them. The same goes for the profile's
+# pnpm-workspace.yaml, which keeps the profile out of the repo's pnpm-lock.yaml.
 set -eu
 root=$(pwd)
 . ./.tools/dsh-env.sh
@@ -18,9 +19,11 @@ mkdir -p "$profile" "$DSH_HOME/work"
 if [ ! -f "$profile/cordis.patch.yml" ] || head -n 1 "$profile/cordis.patch.yml" | grep -q '^# learning profile: DSH web-app host'; then
   cp profile/cordis.patch.yml "$profile/"
 fi
+[ -f "$profile/pnpm-workspace.yaml" ] || cp profile/pnpm-workspace.yaml "$profile/"
 cd "$DSH_HOME/work"
 # contracts and kit are bundled into each unit, so they are not installed. Adding the app bundle
-# also selects it, after dsh-base and dsh-web-app.
+# also selects it, after dsh-base and dsh-web-app. Links are absolute (pwd -W gives Git Bash the D:/
+# form Node reads); `dsh plugin add` resolves a relative link: from the current directory, not the profile.
 for pkg in core shell library knowledge goal assess curriculum textbook annotation learner sidechat tutor planner settings app; do
   dsh plugin --profile learning add "link:$(cd "$root/packages/$pkg" && pwd -W 2>/dev/null || pwd)"
 done

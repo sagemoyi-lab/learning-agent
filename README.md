@@ -19,9 +19,9 @@
 | `packages/settings` | 设置页：模型和模型服务、资料服务、外观、数据与隐私、插件清单；读写 DSH 的设置、密钥、模型和插件服务 |
 | `packages/kit` | 共用辅助代码、前端加载与操作状态、老师和侧边会话共用的聊天组件 |
 | `packages/app` | 组合包 `@learning-agent/app`：在 DSH 服务端和客户端内核之上关掉 DSH 自带界面，挂上我们的单元和 Agent 预设 |
-| `profile/` | `learning` profile 的初始文件：选中 DSH 的两个基础组合包；`cordis.patch.yml` 是学习者自己的一层（设置页保存的设置写在这里） |
+| `profile/` | `learning` profile 的初始文件：选中 DSH 的两个基础组合包；`cordis.patch.yml` 是学习者自己的一层（设置页保存的设置写在这里）；`pnpm-workspace.yaml` 让 profile 用自己的锁文件 |
 | `tests/` | 跨单元的自动测试：`flow.test.ts` 用合成资料跑通整条最小学习流程 |
-| `scripts/` | 构建、安装 profile、启动本机 MinerU；界面截图（`browser.ts`）、演示 GIF（`gif.ts`）和验收用的假模型服务（`fake-openai.ts`） |
+| `scripts/` | 构建、装 DSH、安装 profile、启动本机 MinerU；界面截图（`browser.ts`）、演示 GIF（`gif.ts`）和验收用的假模型服务（`fake-openai.ts`） |
 | `.agents/skills/` | 开发技能（`.claude/skills/` 是 Claude Code 读取的入口） |
 | `spikes/` | 验证代码，不是产品代码 |
 
@@ -31,12 +31,13 @@
 
 ## 开发
 
-需要：Node 24、pnpm 11，DSH 已装在 `.tools/dsh`（版本锁定 `0.2.0-rc.2`），`.env` 里有模型和搜索服务的 key。
+需要：Node 24、pnpm 11，`.env` 里有模型和搜索服务的 key。DSH 版本锁定 `0.2.0-rc.2`，由 `scripts/setup-dsh.sh` 装到 `.tools/dsh`。
 
 学习数据默认放在 `文档/学习库`；开发时 `.tools/dsh-env.sh` 把 `LEARNING_HOME` 设成仓库里的 `.data/`（不进 git）。
 
 ```bash
 pnpm install
+sh scripts/setup-dsh.sh     # 新克隆先运行：装 DSH 到 .tools/dsh，生成 .tools/dsh-env.sh（已有的都不覆盖）
 pnpm typecheck          # 前端、后端各检查一遍
 pnpm test               # 自动测试（vitest），含最小学习流程
 pnpm build              # 构建所有包到 lib/

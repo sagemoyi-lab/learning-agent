@@ -5,7 +5,7 @@
 ## 按需读
 
 - **每次：** 本文件、[PLAN](docs/PLAN.md) 的"现在"、[throughts.md](docs/throughts.md) 最后几条（用户最近说了什么）、`git status` 和 `git log --oneline -10`。
-- **接手别人留下的提交或未提交改动：** 按 `learning-handoff-review` 先验收，再决定保留、修改还是提交；不覆盖、不丢弃别人的未提交代码。起点先跑 `pnpm typecheck`、`pnpm test`、`pnpm build`。
+- **接手别人留下的提交或未提交改动：** 按 `learning-handoff-review` 先验收，再决定保留、修改还是提交；不覆盖、不丢弃别人的未提交代码。起点先跑 `pnpm typecheck`、`pnpm test`、`pnpm build`（新克隆先运行 `sh scripts/setup-dsh.sh`）。
 - **改某个单元前：** 读 `docs/<单元>/design.md`；有进行中的提案，再读 `docs/<单元>/proposals/`。
 - **改 `packages/` 下的代码前：** 读 [packages/AGENTS.md](packages/AGENTS.md)（插件、契约、前端、调用模型）。
 - **改单元之间的服务、事件、数据归属或接口前：** 读 [contracts.md](docs/contracts.md)。
@@ -68,5 +68,5 @@
 - 自动测试不调用付费服务：harness 用本机解析、关闭语义检索，不调用 `searchWeb`（`.env` 导出到环境时会用真实密钥）。
 - 端口：3180 日常开发（`.data/`），3182 验收（`.scratch/smoke-data/`，只有合成数据，各助手共用），3184 规模测量（`.scratch/perf-data/`，测完停掉）。只结束命令行含 `dsh … bin.js learning` 的进程。
 - 3180 和 3182 共用一份 DSH profile 和密钥文件：在 3182 上验收设置或密钥前先备份，验收完还原。
-- 没有改依赖时，提交前用 `git checkout pnpm-lock.yaml` 还原（pnpm 命令和 DSH 启动会改写它）。
+- 没有改依赖时 `pnpm-lock.yaml` 不该变；变了先用 `git checkout pnpm-lock.yaml` 还原再提交，原因见 [development.md](docs/development.md)"profile 和组合包"。
 - 用 shell 的 heredoc 或单行脚本写含反斜杠的代码（正则、LaTeX）时，反斜杠可能被吞掉：写完核对，或者改用直接写文件的工具。
