@@ -1022,7 +1022,7 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 /* Each heading sits in its own block, and the blocks reset their first child's top margin; give the space back. */
 .la-textbook > :is(.la-block, .la-block-plain):not(:first-child) > :is(h1, h2, h3, h4):first-child { margin-top: 1.6em; }
 .la-block { position: relative; margin: 2px -12px; padding: 3px 12px; border-radius: 9px; transition: background-color 0.12s, box-shadow 0.12s; }
-/* A block selected from elsewhere (a note on the 批注 page). Clicking a block does nothing: reading is not interrupted. */
+/* A block selected from elsewhere (a note on the 批注 page). Clicking a block, or selecting text in it, does not outline it. */
 .la-block.is-selected { background: var(--la-accent-soft); box-shadow: inset 3px 0 0 var(--la-accent); }
 /* The check found something: a thin rule in the margin; the header tag makes it a band. */
 .la-block.is-flagged:not(.is-selected) { box-shadow: inset 2px 0 0 var(--la-warn-line); }

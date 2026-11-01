@@ -102,21 +102,17 @@ export interface MarkdownProps {
    * `[label](cite:ck_…)` links become source badges, `cite:unverified` is flagged.
    */
   readonly blocks?: boolean
+  /** Textbook mode: a block to outline, one picked on another page (a note on the 批注 page). */
   readonly selectedBlock?: string
-  /**
-   * A paragraph was clicked. `quote` is the text the learner has selected inside it, as the Markdown source
-   * (formulas whole, `$…$`; citation badges left out), with a little text before and after; absent when
-   * nothing is selected.
-   */
-  readonly onBlock?: (blockId: string, text: string, quote?: TextQuote) => void
   readonly onCite?: (chunkId: string) => void
   /**
-   * Plain mode: the learner selected text inside it (as `onBlock`'s quote: Markdown source, formulas whole) or let go
-   * without selecting (`undefined`). For notes on a source's recognized text.
+   * Plain mode: the learner selected text inside it or let go without selecting (`undefined`). The quote is the
+   * Markdown source (formulas whole, `$…$`; citation badges left out) with a little text before and after. For
+   * notes on a source's recognized text.
    */
   readonly onQuote?: (quote: TextQuote | undefined) => void
   /**
-   * Textbook mode: the learner selected text inside a block (as `onBlock`'s quote), with where the selection is
+   * Textbook mode: the learner selected text inside a block (a quote as `onQuote`'s), with where the selection is
    * on the screen; `undefined` when the selection went away. Clicking a block without selecting calls nothing.
    */
   readonly onSelect?: (pick: TextPick | undefined) => void

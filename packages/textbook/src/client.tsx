@@ -216,13 +216,16 @@ function Reader({ courseId, lessonId, renderSlot }: { courseId: string; lessonId
   const frame = shell.usePage()
   const named = data ? `${data.lesson.number} ${data.lesson.title}` : undefined
   useEffect(() => { if (named) frame.setTitle(named) }, [named])
-  const selectedBlock = selection?.page === 'textbook.reader' && selection.selected?.kind === 'block' ? selection.selected.id : undefined
+  // What the learner selected here stays the selection (for 提问) after the bar goes away, but only the text was
+  // picked: the paragraph is outlined only when it was picked elsewhere.
+  const mine = useRef<object>(undefined)
+  const selectedBlock = selection && selection !== mine.current && selection.page === 'textbook.reader' && selection.selected?.kind === 'block' ? selection.selected.id : undefined
 
-  // A paragraph selected from elsewhere (a note on the 批注 page) is brought into view.
+  // A paragraph selected from elsewhere (a note on the 批注 page) is outlined and brought into view.
   useLayoutEffect(() => {
     const block = selectedBlock ? body.current?.querySelector<HTMLElement>(`[data-block="${CSS.escape(selectedBlock)}"]`) : undefined
     const scroller = body.current?.closest('.la-page')
-    if (!block || !scroller || place) return
+    if (!block || !scroller) return
     const view = scroller.getBoundingClientRect()
     const box = block.getBoundingClientRect()
     if (box.bottom < view.top || box.top > view.bottom) block.scrollIntoView({ block: 'center' })
@@ -269,11 +272,13 @@ function Reader({ courseId, lessonId, renderSlot }: { courseId: string; lessonId
     setInfo(false)
     const column = body.current?.getBoundingClientRect()
     if (!pick || !column) { setPlace(undefined); return }
-    shell.select({
+    const picked: Parameters<LearnShell['select']>[0] = {
       page: 'textbook.reader',
       courseId: courseId as never,
       selected: { kind: 'block', id: pick.blockId, quote: pick.quote, label: `${data.lesson.number} ${data.lesson.title} · ${pick.quote.exact.replace(/\s+/g, ' ').slice(0, 18)}…` },
-    })
+    }
+    mine.current = picked
+    shell.select(picked)
     // Above the selection unless that is out of sight, under the tabs.
     const visible = body.current?.closest('.la-page')?.getBoundingClientRect().top ?? column.top
     const above = pick.rect.top - 46 >= Math.max(visible, column.top)
@@ -323,7 +328,7 @@ function Reader({ courseId, lessonId, renderSlot }: { courseId: string; lessonId
           <shell.Markdown
             text={withoutTitle(shown, data.lesson)}
             blocks
-            {...(selectedBlock && !place ? { selectedBlock } : {})}
+            {...(selectedBlock ? { selectedBlock } : {})}
             {...(running && status.draft ? {} : { onSelect: select })}
             onCite={openSource}
             blockClass={blockId => {

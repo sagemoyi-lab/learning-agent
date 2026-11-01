@@ -81,7 +81,7 @@ function citeTarget(event: MouseEvent): string | undefined {
   return element?.getAttribute('data-cite') ?? undefined
 }
 
-export function Markdown({ text, inline, blocks, selectedBlock, onBlock, onCite, onQuote, onSelect, figure, blockClass, afterBlock, preview }: Props): ReactNode {
+export function Markdown({ text, inline, blocks, selectedBlock, onCite, onQuote, onSelect, figure, blockClass, afterBlock, preview }: Props): ReactNode {
   const pieces = useMemo(() => (blocks ? splitBlocks(text) : undefined), [text, blocks])
   const html = useMemo(() => (blocks ? '' : inline ? toInlineHtml(text) : toHtml(text)), [text, blocks, inline])
   const hover = useCitePreview(preview)
@@ -120,7 +120,7 @@ export function Markdown({ text, inline, blocks, selectedBlock, onBlock, onCite,
     onSelect({ blockId: id, text: piece.source, quote, rect: { top: box.top, left: box.left, right: box.right, bottom: box.bottom } })
   }
   return (
-    <div className="la-md la-textbook" onMouseUp={onSelect ? report : undefined} onKeyUp={onSelect ? report : undefined} {...hover.handlers}>
+    <div className="la-md la-textbook" onClick={handleCite} onMouseUp={onSelect ? report : undefined} onKeyUp={onSelect ? report : undefined} {...hover.handlers}>
       {pieces.map((piece, index) => (
         <Fragment key={piece.id ?? `p${index}`}>
           <MarkdownPiece
@@ -128,13 +128,6 @@ export function Markdown({ text, inline, blocks, selectedBlock, onBlock, onCite,
             selected={piece.id !== undefined && piece.id === selectedBlock}
             extra={piece.id ? blockClass?.(piece.id) : undefined}
             figure={figure}
-            onClick={event => {
-              if (handleCite(event)) return
-              if (!piece.id || onSelect) return
-              const quote = selectedQuote(event.currentTarget, window.getSelection())
-              if (quote) onBlock?.(piece.id, piece.source, quote)
-              else onBlock?.(piece.id, piece.source)
-            }}
           />
           {piece.id && afterBlock?.(piece.id)}
         </Fragment>
@@ -144,10 +137,10 @@ export function Markdown({ text, inline, blocks, selectedBlock, onBlock, onCite,
   )
 }
 
-function MarkdownPiece({ piece, selected, extra, figure, onClick }: { piece: Piece; selected: boolean; extra: string | undefined; figure: Props['figure']; onClick(event: MouseEvent<HTMLDivElement>): void }): ReactNode {
+function MarkdownPiece({ piece, selected, extra, figure }: { piece: Piece; selected: boolean; extra: string | undefined; figure: Props['figure'] }): ReactNode {
   const html = useMemo(() => toHtml(piece.source), [piece.source])
   const className = piece.id ? `la-block${selected ? ' is-selected' : ''}${extra ? ` ${extra}` : ''}` : 'la-block-plain'
-  return <Html key={html} html={html} figure={figure} className={className} data-block={piece.id} onClick={onClick} />
+  return <Html key={html} html={html} figure={figure} className={className} data-block={piece.id} />
 }
 
 /**

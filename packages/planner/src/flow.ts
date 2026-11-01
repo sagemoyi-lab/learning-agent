@@ -69,7 +69,7 @@ export function mainStep(ctx: Context, courseId: string, goal: GoalDoc | undefin
     if (textbook.state === 'missing') return step(`textbook.write:${lesson.id}`, 'teacher', `生成教材 ${lesson.number}`, `课时 ${lesson.number} ${lesson.title} 还没有教材，用 regenerate_textbook（lessonId="${lesson.id}"）生成。`, 'tutor.chat')
     const read = learnCurriculum.tasks(courseId, { lessonId: lesson.id }).find(task => task.kind === 'read')
     if (!read) return step(`read.publish:${lesson.id}`, 'teacher', `发布 ${lesson.number} 的阅读任务`, `用 publish_task 发布课时 ${lesson.number} ${lesson.title}（${lesson.id}）的阅读任务，写清读哪里。`, 'tutor.chat')
-    if (read.status === 'open') return step(`read.do:${read.id}`, 'learner', `读教材 ${lesson.number} ${lesson.title}`, '读完在"课程进度"页点"完成"，或者告诉主老师。读的时候随时可以点一段在右侧提问。', 'textbook.reader', { id: lesson.id })
+    if (read.status === 'open') return step(`read.do:${read.id}`, 'learner', `读教材 ${lesson.number} ${lesson.title}`, '读完在"课程进度"页点"完成"，或者告诉主老师。读的时候随时可以选中一句话，在右侧提问。', 'textbook.reader', { id: lesson.id })
     // A withdrawn quiz is published again; the lesson summary needs one handed in.
     const quiz = learnAssess.tests(courseId, { lessonId: lesson.id, kind: 'quiz' }).filter(test => test.status !== 'abandoned').at(-1)
     if (!quiz) return step(`quiz.publish:${lesson.id}`, 'teacher', `出 ${lesson.number} 的小测`, `先 read_lesson_textbook 读本节教材，再出 2–3 道凭记忆作答的小测题（优先用资料里的题，add_problems），用 start_test(kind="quiz", lessonId="${lesson.id}") 发布。`, 'tutor.chat')
