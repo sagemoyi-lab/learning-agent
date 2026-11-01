@@ -134,7 +134,7 @@ it('does not limit the tools during a test when restrictDuringTests is off', asy
 
 it('puts the selection’s context into the first request once, and again only when the record has none', async () => {
   const { courseId } = await start()
-  h!.ctx.on('learning/describe-selection', async (selection, next) => [...await next(), ...(selection.page === 'textbook.reader' ? ['【教材】静水压强随深度线性增加。'] : [])])
+  h!.ctx.on('learning/describe-selection', async (selection, next) => [...await next(), ...(selection.page === 'textbook.reader' ? ['【讲义】静水压强随深度线性增加。'] : [])])
   const side = await open(courseId, { selected: { kind: 'block', id: 'blk_x', label: '静水压强' } })
   const textsOf = (messages: Awaited<ReturnType<typeof preStep>>) => messages.map(message => message.content.map(part => part.text).join(''))
 
@@ -169,15 +169,15 @@ it('tells the chat the sentence the learner selected, with the paragraph or sour
   expect(source).toContain(chunk.text)
   // Nothing selected inside: the paragraph as a whole.
   const whole = await open(courseId, { selected: { kind: 'block', id: blockId, label: '1.1 静水压强' } })
-  expect(await contextOf(whole.sessionId)).toContain('选中的教材段落（1.1 静水压强，块')
+  expect(await contextOf(whole.sessionId)).toContain('选中的讲义段落（1.1 静水压强，块')
 })
 
 it('tries the context again on the next turn when it could not be assembled', async () => {
   const { courseId } = await start()
   let failures = 1
   h!.ctx.on('learning/describe-selection', async (_selection, next) => {
-    if (failures-- > 0) throw new Error('教材暂时读不出')
-    return [...await next(), '【教材】静水压强随深度线性增加。']
+    if (failures-- > 0) throw new Error('讲义暂时读不出')
+    return [...await next(), '【讲义】静水压强随深度线性增加。']
   })
   const side = await open(courseId, { selected: { kind: 'block', id: 'blk_x', label: '静水压强' } })
 

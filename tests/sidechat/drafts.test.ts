@@ -60,7 +60,7 @@ it('drafts a change for a definite target only, and hands it to the teacher when
   expect(roadmapDrafts).toHaveLength(1)
   expect(roadmapDrafts[0]).toMatchObject({ status: 'draft', label: '课程路线', targets: [{ kind: 'file', path: 'roadmap.md' }] })
   const [blockDraft] = await endpoint<SideChatDraft[]>('sidechat', 'drafts', { sessionId: onBlock.sessionId })
-  expect(blockDraft).toMatchObject({ label: '教材 1.1 静水压强', targets: [{ kind: 'file', path: lesson.textbookFile }] })
+  expect(blockDraft).toMatchObject({ label: '讲义 1.1 静水压强', targets: [{ kind: 'file', path: lesson.textbookFile }] })
 
   // While a test is open the side chat drafts nothing either.
   const quiz = ctx.learnAssess.startTest({ courseId, kind: 'quiz', problemIds: [problems[1]!.id] })
@@ -78,7 +78,7 @@ it('drafts a change for a definite target only, and hands it to the teacher when
   const brief = await ctx.learnTutor.brief(courseId, '')
   expect(brief).toContain(`${proposal.id}（侧边提问里的修改建议，课程路线（roadmap.md））`)
   expect(brief).toContain('先问清学习者的想法再决定')
-  expect(brief).not.toContain('教材报错')
+  expect(brief).not.toContain('讲义报错')
 
   // The teacher has not changed the roadmap: "applied" is refused; after it rewrites the roadmap, it is accepted.
   const teacher = await ctx.learnTutor.session(courseId)

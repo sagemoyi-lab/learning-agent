@@ -1,6 +1,6 @@
 // curriculum unit, browser half: the course progress page (the course's start page), which declares
 // the `learning.course-section` slot (goal, planner, assess and curriculum itself contribute sections);
-// the course outline, which the 教材 icon shows in the sidebar (panel `curriculum.outline`); the stage progress in
+// the course outline, which the 讲义 icon shows in the sidebar (panel `curriculum.outline`); the stage progress in
 // the status bar.
 import { useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
@@ -70,7 +70,7 @@ function useOverview(courseId: string | undefined) {
 }
 
 function openLesson(lesson: Pick<Lesson, 'id' | 'number'>): void {
-  shell.openPage('textbook.reader', { id: lesson.id }, { title: `教材 ${lesson.number}` })
+  shell.openPage('textbook.reader', { id: lesson.id }, { title: `讲义 ${lesson.number}` })
 }
 
 function ProgressPage({ scope, renderSlot }: LearningPageProps & PropsRenderSlots<'learning.course-section'>): ReactNode {
@@ -277,16 +277,16 @@ function decisionWords(review: StageReview): string {
 }
 
 const TEXTBOOK_TAG: Record<LessonTextbookStatus['state'], { text: string; tone: Tone } | undefined> = {
-  missing: { text: '教材未生成', tone: 'neutral' },
-  running: { text: '教材生成中', tone: 'warn' },
+  missing: { text: '讲义未生成', tone: 'neutral' },
+  running: { text: '讲义生成中', tone: 'warn' },
   ready: undefined,
-  failed: { text: '教材生成失败', tone: 'bad' },
+  failed: { text: '讲义生成失败', tone: 'bad' },
 }
 
 function TextbookTag({ status }: { status: LessonTextbookStatus | undefined }): ReactNode {
   const tag = status ? TEXTBOOK_TAG[status.state] : undefined
   if (!tag) return null
-  const text = status?.state === 'running' && status.message === '排队等待生成' ? '教材排队中' : tag.text
+  const text = status?.state === 'running' && status.message === '排队等待生成' ? '讲义排队中' : tag.text
   return <Tag tone={tag.tone} icon={status?.state === 'running' ? LoaderCircle : status?.state === 'failed' ? TriangleAlert : undefined} title={status?.message}>{text}</Tag>
 }
 
@@ -329,9 +329,9 @@ function StageItem({ stage }: { stage: Stage & { lessons: Lesson[] } }): ReactNo
               <Callout tone="accent" icon={FileText} title="阶段设计书写好了，等你确认"
                 actions={<>
                   <Button size="sm" variant="quiet" onClick={() => setShowDesign(!showDesign)}>{showDesign ? '收起' : '先看看'}</Button>
-                  <Button size="sm" variant="primary" loading={action.busy} onClick={() => void action.run(() => shell.call('curriculum', 'confirmDesign', { stageId: stage.id }))}>确认，生成教材</Button>
+                  <Button size="sm" variant="primary" loading={action.busy} onClick={() => void action.run(() => shell.call('curriculum', 'confirmDesign', { stageId: stage.id }))}>确认，生成讲义</Button>
                 </>}>
-                确认后开始生成本阶段的教材。想改哪里，直接告诉主老师。
+                确认后开始生成本阶段的讲义。想改哪里，直接告诉主老师。
               </Callout>
             )}
             {showDesign && (design.data ? <div className="la-doc"><shell.Markdown text={design.data} /></div> : design.loading ? <Skeleton lines={4} /> : <span className="la-faint">设计书还没有写。</span>)}
@@ -363,7 +363,7 @@ function useActivePage() {
   return useSyncExternalStore(listener => shell.onActivePage(listener), () => shell.activePage())
 }
 
-/** The 教材 panel in a course: stages and their lessons; a lesson opens its textbook in the current tab. */
+/** The 讲义 panel in a course: stages and their lessons; a lesson opens its textbook in the current tab. */
 function CourseOutline({ scope }: { scope: ShellScope }): ReactNode {
   const courseId = scope.kind === 'course' ? scope.courseId : undefined
   const overview = useOverview(courseId)

@@ -107,7 +107,7 @@ class LearnTutorService extends Service implements LearnTutor {
       throw new LearningApiError('learning/tutor/other-course', `课时 ${lesson.number} 不是这门课的课时。`, { lessonId })
     }
     const quiz = this.ctx.learnAssess.tests(courseId, { lessonId, kind: 'quiz' }).filter(test => test.status !== 'abandoned').at(-1)
-    if (!quiz) throw new LearningApiError('learning/tutor/no-quiz', `${lesson.number} 还没有小测：先读本节教材，出 2–3 道小测题（start_test，kind="quiz"），学习者交卷后再写小结。`, { lessonId })
+    if (!quiz) throw new LearningApiError('learning/tutor/no-quiz', `${lesson.number} 还没有小测：先读讲义里这一节，出 2–3 道小测题（start_test，kind="quiz"），学习者交卷后再写小结。`, { lessonId })
     if (quiz.status === 'open') throw new LearningApiError('learning/tutor/quiz-open', `${lesson.number} 的小测还没交卷：等学习者交卷后再写小结。`, { lessonId })
     const view = must(this.ctx.learnAssess.view(quiz.id), 'tutor', '测试', quiz.id)
     const number = (problemId: string | undefined) => quiz.problemIds.indexOf(problemId as never) + 1

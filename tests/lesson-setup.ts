@@ -1,6 +1,6 @@
 // A course at its first lesson, for tests that need a stage under way: the goal confirmed, the synthetic
 // chapter as the skeleton textbook, one knowledge node, the chapter's exercises as practice problems
-// (answers 10000, 20000, … Pa), a finished diagnostic, and a one-lesson stage whose textbook is written.
+// (answers 10000, 20000, … Pa), a finished diagnostic, and a one-lesson stage whose handout is written.
 import { join } from 'node:path'
 import type { Id, Lesson, Problem, Stage } from '@learning-agent/contracts'
 import { FIXTURES, textbookSettled, type Harness, type ModelCall } from './harness.ts'
@@ -10,9 +10,13 @@ const meta = { actor: 'teacher' as const, reason: '课时测试准备（合成�
 
 let citation = ''
 
-/** The fake writer's lesson for 1.1; `undefined` for any other call. */
+/** A plan with nothing but the sections: the handout is section 1.1 alone. */
+export const SECTIONS_ONLY = JSON.stringify({ overview: '', terms: [], formulas: [], needs: [], confusions: [], types: [] })
+
+/** The fake planner and writer of the handout: 1.1 in one paragraph; `undefined` for any other call. */
 export function lessonText(call: ModelCall): string | undefined {
-  if (call.purpose === 'learning-textbook') return `## 1.1 静水压强\n\n静水压强按水的深度计算。[合成资料 p.1](cite:${citation})`
+  if (call.purpose === 'learning-textbook-plan') return SECTIONS_ONLY
+  if (call.purpose === 'learning-textbook') return `静水压强按水的深度计算。[合成资料 p.1](cite:${citation})`
   return undefined
 }
 
@@ -24,7 +28,7 @@ export interface LessonCourse {
   readonly problems: readonly Problem[]
 }
 
-/** `beforeConfirm` runs just before the learner confirms the stage design (and its textbook is written). */
+/** `beforeConfirm` runs just before the learner confirms the stage design (and its handout is written). */
 export async function lessonCourse(h: Harness, title: string, beforeConfirm?: () => void): Promise<LessonCourse> {
   const { ctx, endpoint } = h
   const course = await endpoint('core', 'createCourse', { title })
@@ -60,7 +64,7 @@ export async function lessonCourse(h: Harness, title: string, beforeConfirm?: ()
   beforeConfirm?.()
   const settled = textbookSettled(ctx, lesson.id)
   await endpoint('curriculum', 'confirmDesign', { stageId: stages[0]!.id })
-  if (await settled !== 'ready') throw new Error('textbook not written')
+  if (await settled !== 'ready') throw new Error('handout not written')
   await h.settle()
   return { courseId, nodeId, stage: ctx.learnCurriculum.stage(stages[0]!.id)!, lesson, problems }
 }

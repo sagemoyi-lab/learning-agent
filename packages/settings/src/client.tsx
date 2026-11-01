@@ -100,7 +100,7 @@ const PI_AI = 'llm-pi-ai'
 const DEEPSEEK = { provider: 'deepseek-official', ns: 'llm-deepseek', key: 'DEEPSEEK_API_KEY', name: 'DeepSeek' } as const
 const MODEL_ROLE = 'learning-model'
 /** Roles in reading order; roles other plugins declare follow. */
-const ROLE_ORDER = ['主老师', '侧边提问', '写教材', '判分', '侧边会话总结']
+const ROLE_ORDER = ['主老师', '侧边提问', '写讲义', '判分', '侧边会话总结']
 const PROTOCOL_LABEL: Record<string, string> = { 'openai-completions': 'OpenAI Chat Completions', 'openai-responses': 'OpenAI Responses', 'anthropic-messages': 'Anthropic Messages' }
 /**
  * Readable names for DSH's known providers (DSH lists only their ids), in the order 添加模型服务 offers them;
@@ -547,7 +547,7 @@ function ModelLimits({ view, store, catalog, where, models, model, onPick }: {
         <Field label="上下文窗口" hint="问题和回复合计的上限。对话接近它时，主老师会先压缩前面的内容。">
           <TextField value={context} onChange={setContext} width={160} aria-label="上下文窗口" placeholder={fallback.contextWindow ? `默认 ${formatCapacity(fallback.contextWindow)}` : '默认：厂商目录的值'} />
         </Field>
-        <Field label="最大输出" hint="一次回复的上限，思考也算在内。写教材一次要 16K，设得更小会被截断。">
+        <Field label="最大输出" hint="一次回复的上限，思考也算在内。写讲义一次要 16K，设得更小会被截断。">
           <TextField value={output} onChange={setOutput} width={160} aria-label="最大输出" placeholder={fallback.maxTokens ? `默认 ${formatCapacity(fallback.maxTokens)}` : '默认：厂商目录的值'} />
         </Field>
       </div>
@@ -755,7 +755,7 @@ function DataSection({ store }: { store: Store }): ReactNode {
   ]
   return (
     <div className="la-stack" style={{ gap: 28 }}>
-      <Section title="学习库" description="课程、教材、作答记录和资料都存在这个文件夹里，可以用 Obsidian 打开。位置在工作台启动时确定，运行中不能更换。">
+      <Section title="学习库" description="课程、讲义、作答记录和资料都存在这个文件夹里，可以用 Obsidian 打开。位置在工作台启动时确定，运行中不能更换。">
         {about.data ? <code className="la-path">{about.data.dataRoot}</code> : <Skeleton lines={1} />}
         <ErrorText error={about.error} />
       </Section>

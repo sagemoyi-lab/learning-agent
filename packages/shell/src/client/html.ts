@@ -64,8 +64,14 @@ function linkBareChunks(text: string): string {
   return text.replace(BARE_CHUNK, '[出处](cite:$1)')
 }
 
+/** Badges side by side that name the same page of the same book show as one (a handout cites one per paragraph). */
+const SAME_BADGES = /(<a class="la-cite" data-cite="[^"]*" data-la-opens title="([^"]*)">[^<]*<\/a>)(?:\s*<a class="la-cite" data-cite="[^"]*" data-la-opens title="\2">[^<]*<\/a>)+/g
+
 export function toHtml(text: string): string {
   return marked.parse(linkBareChunks(text), { async: false })
+    .replace(SAME_BADGES, '$1')
+    // A wide table scrolls inside its own frame instead of widening the column.
+    .replace(/<table>/g, '<div class="la-table"><table>').replace(/<\/table>/g, '</table></div>')
 }
 
 export function toInlineHtml(text: string): string {

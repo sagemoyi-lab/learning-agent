@@ -387,7 +387,7 @@ function NoteBody({ note, showQuote, showText = true, place }: { note: NoteView;
           <span className="la-spacer" />
           {!place && <span className="la-faint la-small">{friendlyTime(note.createdAt)}</span>}
           {place && note.location.status !== 'original-only' && (
-            <Button size="sm" variant="quiet" icon={place.kind === 'lesson' ? BookOpen : Library} opens onClick={() => openPlace(place, note)}>{place.kind === 'lesson' ? '在教材里看' : '在资料里看'}</Button>
+            <Button size="sm" variant="quiet" icon={place.kind === 'lesson' ? BookOpen : Library} opens onClick={() => openPlace(place, note)}>{place.kind === 'lesson' ? '在讲义里看' : '在资料里看'}</Button>
           )}
           <Button size="sm" variant="quiet" icon={Pencil} onClick={() => { setText(note.text); setEditing(true) }}>{note.text ? '编辑' : '写一句'}</Button>
           <ConfirmButton size="sm" variant="quiet" icon={Trash2} loading={remove.busy} question="删除这条批注？" confirm="删除"
@@ -442,7 +442,7 @@ function LocationFix({ note }: { note: NoteView }): ReactNode {
   // A reported error the teacher decided: the sentence moved because of the fix, nothing to settle.
   if (place.status === 'anchored' || (note.proposal && note.proposal.status !== 'open')) return null
   if (place.status === 'original-only') {
-    return <Callout tone="neutral" icon={MapPin} title="教材里找不到这句话了">{place.reason ?? '批注和你划的原句还保留着'}</Callout>
+    return <Callout tone="neutral" icon={MapPin} title="讲义里找不到这句话了">{place.reason ?? '批注和你划的原句还保留着'}</Callout>
   }
   const settle = (blockId?: string) => void confirm.run(async () => { await shell.call('annotation', 'confirm', { annotationId: note.id, ...(blockId ? { blockId } : {}) }) })
   return (
@@ -472,7 +472,7 @@ function LocationFix({ note }: { note: NoteView }): ReactNode {
 function NotesPage(): ReactNode {
   const scope = useScope(shell)
   if (scope.kind !== 'course') {
-    return <Page><EmptyState icon={NotebookPen} title="进入一门课后查看批注" description="批注跟着课程走：在教材上选一段文字，点「批注」就能记下疑问、理解、重点或报错。" /></Page>
+    return <Page><EmptyState icon={NotebookPen} title="进入一门课后查看批注" description="批注跟着课程走：在讲义上选一段文字，点「批注」就能记下疑问、理解、重点或报错。" /></Page>
   }
   return <CourseNotes courseId={scope.courseId} />
 }
@@ -502,7 +502,7 @@ function openPlace(place: NotePlace, note?: NoteView): void {
     shell.openPage('library.sources', { chunkId: place.chunkId }, { title: '出处', side: true })
     return
   }
-  shell.openPage('textbook.reader', { id: place.lessonId }, { title: '教材' })
+  shell.openPage('textbook.reader', { id: place.lessonId }, { title: '讲义' })
   // Selecting the paragraph scrolls the reader to it.
   const blockId = note && blockOf(note)
   if (note && blockId) {
@@ -525,7 +525,7 @@ function CourseNotes({ courseId }: { courseId: string }): ReactNode {
   return (
     <Page>
       <PageHeader eyebrow={<><NotebookPen size={14} strokeWidth={1.75} />课程批注</>} title="批注"
-        description="你在教材上划的重点、写的疑问和理解。教材改过之后，对不上位置的批注会在这里等你确认，不会自己挂到别处。"
+        description="你在讲义上划的重点、写的疑问和理解。讲义改过之后，对不上位置的批注会在这里等你确认，不会自己挂到别处。"
         meta={unsureCount > 0 ? <Tag tone="warn" icon={MapPin} pressed={unsure} onClick={() => setUnsure(on => !on)} title="原文改过、位置要你确认的批注；点一下只看这些">{unsureCount} 条位置待确认</Tag> : undefined} />
       <div className="la-stack">
         <div className="la-toolbar">
@@ -538,12 +538,12 @@ function CourseNotes({ courseId }: { courseId: string }): ReactNode {
         {shown.length === 0 ? (
           <div className="la-card">
             <EmptyState compact icon={NotebookPen} title={kept.length === 0 ? '还没有批注' : '没有符合条件的批注'}
-              description={kept.length === 0 ? '在教材上选中一段文字，点「批注」，就能记下疑问、理解、重点或报错。' : '换个类型，或者勾上"显示已解决的疑问"。'} />
+              description={kept.length === 0 ? '在讲义上选中一段文字，点「批注」，就能记下疑问、理解、重点或报错。' : '换个类型，或者勾上"显示已解决的疑问"。'} />
           </div>
         ) : groupsOf(shown, places).map(group => (
           <Section key={group.key} icon={group.place?.kind === 'source' ? Library : BookOpen} count={group.notes.length}
             title={group.place ? group.place.title : '找不到所在课时'}
-            actions={group.place ? <Button size="sm" variant="quiet" opens onClick={() => openPlace(group.place!)}>{group.place.kind === 'lesson' ? '打开教材' : '打开资料'}</Button> : undefined}>
+            actions={group.place ? <Button size="sm" variant="quiet" opens onClick={() => openPlace(group.place!)}>{group.place.kind === 'lesson' ? '打开讲义' : '打开资料'}</Button> : undefined}>
             <div className="la-note-list">
               {group.notes.map(note => <NoteCard key={note.id} note={note} place={group.place} />)}
             </div>
@@ -565,7 +565,7 @@ function PanelNotes({ courseId }: { courseId: string }): ReactNode {
   const kept = notes.filter(note => !note.hiddenAt && !(note.type === 'question' && note.resolvedAt))
   return (
     <>
-      {kept.length === 0 && <div className="la-side-empty">在教材上选中一段文字，点「批注」，就能记下疑问、理解、重点或报错。</div>}
+      {kept.length === 0 && <div className="la-side-empty">在讲义上选中一段文字，点「批注」，就能记下疑问、理解、重点或报错。</div>}
       {groupsOf(kept, places).map(group => (
         <div key={group.key} className="la-side-section">
           <div className="la-side-heading"><span>{group.place ? group.place.title : '找不到所在课时'}</span></div>

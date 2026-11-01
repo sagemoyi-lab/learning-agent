@@ -10,9 +10,9 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.tools.register(textTool({
     name: 'draft_proposal',
     title: '起草修改建议',
-    description: '学习者明确想改课程的某处（教材的讲法、某个阶段的设计、课程路线、目标说明、知识点）时，起草一条修改建议。你自己不能改：草稿显示在学习者的侧边栏，学习者点"交给主老师"后，主老师核对资料再决定改不改。只是疑问、没有修改意图时不要用；题目有错请学习者在测试页点"这题有问题"。',
+    description: '学习者明确想改课程的某处（讲义的讲法、某个阶段的设计、课程路线、目标说明、知识点）时，起草一条修改建议。你自己不能改：草稿显示在学习者的侧边栏，学习者点"交给主老师"后，主老师核对资料再决定改不改。只是疑问、没有修改意图时不要用；题目有错请学习者在测试页点"这题有问题"。',
     parameters: {
-      target: { type: 'string', required: true, enum: ['selection', 'roadmap', 'goal'], description: 'selection：学习者打开这次提问时选中的内容（教材段落、阶段、知识点）；roadmap：课程路线（阶段的顺序、增删）；goal：目标说明' },
+      target: { type: 'string', required: true, enum: ['selection', 'roadmap', 'goal'], description: 'selection：学习者打开这次提问时选中的内容（讲义段落、阶段、知识点）；roadmap：课程路线（阶段的顺序、增删）；goal：目标说明' },
       change: { type: 'string', required: true, description: '改什么，一两句话，写给主老师和学习者看，不写内部编号' },
       reason: { type: 'string', required: true, description: '为什么：学习者的想法和理由；有资料依据时写出处（书名和页码）' },
     },

@@ -220,7 +220,7 @@ export const Lesson = z.object({
   number: z.string(),
   title: z.string(),
   status: LessonStatus,
-  /** Textbook file, relative to the course folder. */
+  /** The handout (讲义) the lesson is read in, relative to the course folder: the stage's `handout.md`, or before 11-01 a file of its own. */
   textbookFile: relativePath.optional(),
   /** Lesson record (quiz result, report, teacher summary), relative to the course folder. */
   recordFile: relativePath.optional(),

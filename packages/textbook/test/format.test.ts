@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { withFrontmatter, type CitedChunk } from '@learning-agent/contracts'
-import { asConcept, conceptBlocks, conceptsText, finalize, halve, indexBlocks, materialSize, planParts, pointText, splitPieces, teachingPartOf } from '../src/format.ts'
+import { finalize, halve, indexBlocks, isTable, replyBody, splitPieces, teachingPartOf } from '../src/format.ts'
 
 const KNOWN = 'ck_01K6PQZRB8M3A4T5V6W7X8Y9Z0'
 const UNKNOWN = 'ck_01K6PQZRB8M3A4T5V6W7X8Y9ZZ'
@@ -98,38 +98,13 @@ describe('textbook format', () => {
   })
 
   it('drops the comma between two citations, not the one before a sentence goes on', () => {
-    const { body } = finalize(`甲。[x](cite:${KNOWN})、[y](https://a.example.edu.cn/x)，[x](cite:${KNOWN})，乙。`, { knownChunk: () => true, knownUrl: () => true, newBlockId: () => 'ccccc0' })
-    expect(body).toBe(`甲。[x](cite:${KNOWN})[y](https://a.example.edu.cn/x)[x](cite:${KNOWN})，乙。 ^ccccc0\n`)
+    const { body } = finalize(`甲。[x](cite:${KNOWN})、[y](https://a.example.edu.cn/x)，[z](cite:${FORMULA})，乙。`, { knownChunk: () => true, knownUrl: () => true, newBlockId: () => 'ccccc0' })
+    expect(body).toBe(`甲。[x](cite:${KNOWN})[y](https://a.example.edu.cn/x)[z](cite:${FORMULA})，乙。 ^ccccc0\n`)
   })
 
   it('reads a file written before 10-15 with its 待核实 marks', () => {
     const blocks = indexBlocks('段落一。 [待核实](cite:unverified) ^aaaaa1\n\n段落二。 ^bbbbb2\n')
     expect(blocks.map(block => block.unverified)).toEqual([true, false])
-  })
-
-  it('puts a point under its own heading in 知识点, lower headings inside it, and no recall questions', () => {
-    const reply = '## 1.2 节标题\n\n### 模型起的标题\n\n讲解。\n\n### 小标题\n\n更多讲解。\n\n### 读完就答\n\n1. 问题？'
-    expect(pointText(reply, '静力学基本方程')).toBe('#### 静力学基本方程\n\n讲解。\n\n##### 小标题\n\n更多讲解。')
-    expect(pointText(reply, undefined)).toBe('讲解。\n\n##### 小标题\n\n更多讲解。')
-  })
-
-  it('gives each concept a paragraph of its own, then names the ones the material does not explain', () => {
-    const reply = '### 本节概念\n\n- **压强**：垂直作用在单位面积上的力。\n- **表压**：比大气压高出的部分，\n  读压力表得到。\n\n**等压面**：$$p_1 = p_2$$ 的面。'
-    expect(conceptsText(reply, ['扩大室'])).toBe([
-      '### 本节概念',
-      '**压强**：垂直作用在单位面积上的力。',
-      '**表压**：比大气压高出的部分，\n读压力表得到。',
-      '**等压面**：$$p_1 = p_2$$ 的面。',
-      '> [!note] 资料里没有讲到：扩大室。可以问主老师，或在资料库里加一份讲它的资料。',
-    ].join('\n\n'))
-    expect(conceptsText('', [])).toBe('### 本节概念')
-  })
-
-  it('keeps a rewritten concept one paragraph under its name, without source text copied in', () => {
-    const body = `## 1.2 节\n\n### 本节概念\n\n**压强**：单位面积上的力。 ^aaaaa1\n\n> [!note] 资料里没有讲到：扩大室。 ^aaaaa2\n\n### 知识点\n\n**注意**：这不是概念。 ^aaaaa3\n`
-    expect(conceptBlocks(body)).toEqual(new Map([['aaaaa1', '压强']]))
-    expect(asConcept('压强', `压强是垂直压在单位面积上的力，\n\n![[${FORMULA}]]\n\n记作 $p$。`)).toBe('**压强**：压强是垂直压在单位面积上的力，记作 $p$。')
-    expect(asConcept('压强', '**压强**：换个说法。')).toBe('**压强**：换个说法。')
   })
 
   it('writes inline math with dollars, leaves out an embed it cannot read, and puts a link to a page\'s site on the page', () => {
@@ -150,19 +125,35 @@ describe('textbook format', () => {
     expect(finalize('丙按[讲义](https://b.example.edu.cn/x)来算。', options).body).toBe('丙按讲义来算。 ^nnnnn0\n')
   })
 
-  it('splits long material into parts at headings, within the limit', () => {
-    const heading = (text: string) => ({ kind: 'heading', text })
-    const text = (n: number) => ({ kind: 'text', text: 'x'.repeat(n) })
-    // Heading-led runs costing 305, 407, 257 and 87 (each chunk costs its text + 80).
-    const chunks = [heading('1.2 节'), text(140), heading('1.2.1 甲'), text(240), heading('1.2.2 乙'), text(90), heading('1.2.3 丙')]
-    expect(planParts(chunks, 10_000)).toHaveLength(1)
-    const parts = planParts(chunks, 700)
-    expect(parts.map(part => part[0]!.text)).toEqual(['1.2 节', '1.2.1 甲', '1.2.3 丙'])
-    expect(parts.flat()).toEqual(chunks)
-    for (const part of parts) expect(part.reduce((sum, chunk) => sum + materialSize(chunk), 0)).toBeLessThanOrEqual(700)
-    // A run larger than the limit is cut between its chunks.
-    const long = [heading('1.2 节'), text(300), text(300), text(300)]
-    expect(planParts(long, 500).map(part => part.length)).toEqual([2, 1, 1])
+  it('gives a table its id on a line of its own, keeping a source cited on several rows', () => {
+    const table = `| 名词 | 是什么 | 出处 |\n|---|---|---|\n| **压强** | 单位面积上的力 | [x](cite:${KNOWN}) |\n| **表压** | 比大气压高的部分 | [x](cite:${KNOWN}) |`
+    expect(isTable(table)).toBe(true)
+    expect(isTable('| 只有一行 |')).toBe(false)
+    const { body, blocks } = finalize(table, { knownChunk: id => id === KNOWN, newBlockId: () => 'ttttt0' })
+    expect(body).toBe(`${table}\n\n^ttttt0\n`)
+    expect(blocks.map(block => [block.id, block.citations])).toEqual([['ttttt0', [KNOWN]]])
+  })
+
+  it('shows a source cited twice in one paragraph once', () => {
+    const { body } = finalize(`甲。[x](cite:${KNOWN}) 乙。[x](cite:${KNOWN})[y](cite:${FORMULA})`, { knownChunk: () => true, newBlockId: () => 'ddddd0' })
+    expect(body).toBe(`甲。[x](cite:${KNOWN}) 乙。[y](cite:${FORMULA}) ^ddddd0\n`)
+    // The separator the repeat leaves goes with it.
+    expect(finalize(`丙。[x](cite:${KNOWN})，[x](cite:${KNOWN})，丁。`, { knownChunk: () => true, newBlockId: () => 'ddddd1' }).body).toBe(`丙。[x](cite:${KNOWN})，丁。 ^ddddd1\n`)
+  })
+
+  it('keeps the embeds a section may have and drops the rest', () => {
+    let n = 0
+    const formulas = [0, 1, 2, 3].map(i => chunk(`ck_01K6PQZRB8M3A4T5V6W7X8Y9F${i}`, 'formula', `$$x_${i} = ${i}$$`))
+    const { blocks, dropped } = finalize(formulas.map(item => `![[${item.id}]]`).join('\n\n'), { knownChunk: () => true, embed: { order: formulas, extra: [] }, embedLimit: 3, newBlockId: () => `fffff${n++}` })
+    expect(blocks).toHaveLength(3)
+    expect(dropped).toEqual([`嵌入 ${formulas[3]!.id} 超过了每节 3 处`])
+  })
+
+  it('takes out the headings a writer should not write, and recall questions', () => {
+    const reply = '```markdown\n### 1.2 节标题\n\n讲解。\n\n#### 小标题\n\n更多讲解。\n\n### 读完就答\n\n1. 问题？\n```'
+    expect(replyBody(reply)).toBe('讲解。\n\n更多讲解。')
+    // The types keep theirs (`####`), a deeper one at that level.
+    expect(replyBody('### 题型与方法\n\n#### 由一点求另一点\n\n- 步骤\n\n##### 再分一类\n\n- 步骤', 4)).toBe('#### 由一点求另一点\n\n- 步骤\n\n#### 再分一类\n\n- 步骤')
   })
 
   it('halves a part at the heading nearest the middle', () => {

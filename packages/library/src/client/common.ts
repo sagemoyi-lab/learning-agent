@@ -15,7 +15,7 @@ export type Services = { parser: '本机' | '云端'; parserReady: boolean; sema
 export type LessonUse = { id: string; number: string; title: string }
 
 export const ROLE_LABEL: Record<CourseSource['role'], string> = { skeleton: '骨架教材', reference: '参考资料', 'exam-archive': '往年试题' }
-export const ROLE_HINT: Record<CourseSource['role'], string> = { skeleton: '教材按它的结构编写', reference: '讲解和出题时一并查', 'exam-archive': '按题号导入，组模拟考' }
+export const ROLE_HINT: Record<CourseSource['role'], string> = { skeleton: '讲义按它的结构编写', reference: '讲解和出题时一并查', 'exam-archive': '按题号导入，组模拟考' }
 export const ROLES: readonly CourseSource['role'][] = ['skeleton', 'reference', 'exam-archive']
 export const AUTHORITY_LABEL: Record<Source['authority'], string> = { '1': '一级', '2': '二级', '3': '三级', clue: '只当线索' }
 

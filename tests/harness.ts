@@ -47,7 +47,7 @@ export interface Delivered {
 export interface HarnessSettings {
   readonly tutor?: { readonly model?: string }
   readonly sidechat?: { readonly model?: string; readonly summaryModel?: string; readonly restrictDuringTests?: boolean }
-  readonly textbook?: { readonly model?: string; readonly checkModel?: string; readonly webCheck?: boolean }
+  readonly textbook?: { readonly model?: string; readonly webCheck?: boolean }
   readonly assess?: { readonly model?: string }
   readonly knowledge?: { readonly model?: string }
   readonly planner?: { readonly dailyChecks?: number }
@@ -164,6 +164,8 @@ export function createHarness(reply: (call: ModelCall) => string | { readonly fi
         return
       }
       yield { type: 'text-delta', index: 0, text: answer }
+      // Tokens as characters, so a test can add them up.
+      yield { type: 'usage', usage: { inputTokens: call.system.length + call.prompt.length, outputTokens: answer.length } }
       yield { type: 'finish', reason: { kind: 'stop' } }
     },
   })
@@ -231,10 +233,12 @@ export function headingsOf(call: ModelCall): string {
   return [...material.matchAll(/^(\d+(?:\.\d+)+ \S.*)$/gm)].map(match => `### ${match[1]}`).join('\n\n')
 }
 
-/** Wait until a lesson's textbook generation settles (ready or failed). */
+/** Wait until the handout of a lesson's stage settles (ready or failed). */
 export function textbookSettled(ctx: Context, lessonId: string): Promise<'ready' | 'failed'> {
+  const stageId = ctx.learnCurriculum.lesson(lessonId)?.stageId
+  const ours = (event: { lessonId: string; stageId?: string }) => event.lessonId === lessonId || (stageId !== undefined && event.stageId === stageId)
   return new Promise(done => {
-    const offReady = ctx.on('learning/textbook-ready', event => { if (event.lessonId === lessonId) { offReady(); offFailed(); done('ready') } })
-    const offFailed = ctx.on('learning/textbook-failed', event => { if (event.lessonId === lessonId) { offReady(); offFailed(); done('failed') } })
+    const offReady = ctx.on('learning/textbook-ready', event => { if (ours(event)) { offReady(); offFailed(); done('ready') } })
+    const offFailed = ctx.on('learning/textbook-failed', event => { if (ours(event)) { offReady(); offFailed(); done('failed') } })
   })
 }

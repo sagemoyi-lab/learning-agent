@@ -140,7 +140,7 @@ it('introduces a stage on its first wake-up unless the teacher already spoke the
   controller.resolveAgent = resolve
   await h.settle(2300)
   const late = h.delivered.filter(item => item.sessionId === session)
-  expect(late.at(-1)?.text).toContain(`教材 ${lesson.number} ${lesson.title} 已生成`)
+  expect(late.at(-1)?.text).toContain(`讲义 ${stage.title} 已生成`)
   expect(late.at(-1)?.text).not.toContain('第一次课')
 })
 

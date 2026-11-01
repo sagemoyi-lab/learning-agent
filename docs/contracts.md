@@ -29,7 +29,7 @@
       ├─ roadmap.md         课程路线
       ├─ stages/01-流体流动/
       │  ├─ design.md       阶段设计书（含测试蓝图）
-      │  ├─ textbook/       本阶段教材，一个小节一个文件
+      │  ├─ handout.md      本阶段讲义，阶段的课时共用（旧版按小节分的在 textbook/）
       │  ├─ lessons/        每个课时的记录：小测结果、学习者的汇报、老师的小结
       │  └─ review.md       阶段复盘
       ├─ notes/side-chats.md  侧边会话总结（只追加）
@@ -37,13 +37,14 @@
       └─ report.md          课程报告
 ```
 
-- 一个小节一个文件：课时按小节推进，批注、阅读进度和生成也按小节进行。
+- 一个阶段一份讲义：课时按小节推进、读其中一节；块索引记下每块所在的课时，批注和提问按它找课时。
 - 文件名用英文（程序认固定的文件名），标题和文件内容用中文。
 - 主界面的侧边会话以数据根目录为工作目录。
 
-### 2.2 教材文件
+### 2.2 讲义文件
 
-- frontmatter 写课时、标题、版本和生成编号（`run`，重启后用来认出已经发布的版本）。
+- frontmatter 写阶段、标题、版本和生成编号（`run`，重启后用来认出已经发布的版本）。
+- 版式：`## 阶段标题`，`### 本章速览`（`#### 名词`、`#### 公式` 两张表），每个课时一个 `### 编号 标题`，`### 易混点`（表），`### 题型与方法`（每类一个 `####`）。块所在的课时按它上面的 `###` 编号认。
 - **段落块 ID** 写在段落末尾，形如 `^b7k2qx`（6 位小写字母数字，课程内唯一）；公式、表格、引用框这类块，ID 隔一个空行单独一行（Obsidian 的写法）。
 - **出处** 写成 `[《书名》p.页码](cite:片段ID)`；网页出处是普通链接 `[网页标题](https://…)`。
 - **资料原文**（公式、例题、原书解答、图、表）由程序原样复制，写成 Obsidian 引用框 `> [!quote] 原文 · [《书名》p.页码](cite:片段ID)`，原书解答是折叠的 `[!quote]-`；图写成 `![图注](cite:片段ID)`，页面从原件裁图显示。
@@ -55,7 +56,7 @@
 
 | 数据 | 真相在 |
 |---|---|
-| 目标说明、路线、设计书、教材正文、课时记录、复盘、侧边会话总结、课程报告 | 课程文件夹里的 Markdown（结构化字段写在 frontmatter） |
+| 目标说明、路线、设计书、讲义正文、课时记录、复盘、侧边会话总结、课程报告 | 课程文件夹里的 Markdown（结构化字段写在 frontmatter） |
 | 课程、阶段、课时、任务的状态 | 数据库 |
 | 知识节点与关系、资料片段索引、题库、测试和作答 | 数据库 |
 | 学习证据 | 数据库，只追加（§4） |
@@ -77,7 +78,7 @@
 | 阶段、课时、任务、路线调整、阶段复盘、课程报告 | `curriculum` | 阶段的状态：计划中 → 设计中 → 待学习 → 学习中 → 测试中 → 复盘中 → 已完成，可以插补课阶段 |
 | 知识节点、关系、课程成员、来源连线、操作组、合并、抽取任务 | `knowledge` | 关系类型见下 |
 | 资料、片段、课程与资料、导入任务、网上资料、网站级别 | `library` | 权威级别由 `library` 按网站规则定，不采信调用方给的 |
-| 教材块索引、生成记录、核对结果、修订记录 | `textbook` | |
+| 讲义块索引、生成记录、检查结果、修订记录 | `textbook` | |
 | 批注 | `annotation` | 锚点存原句、前后文和段落指纹，位置在读取时推算 |
 | 题目、见过的题、测试、作答、草稿、题目报告、申诉、作业标记 | `assess` | 练习题池和测试预留题分开 |
 | 掌握状态 | `learner` | 只读证据日志和知识图推算；规则版本变了就全部重算 |
@@ -118,7 +119,7 @@
 | `learnGoal` | `goal` | 读目标说明、测试条件（按测试种类） |
 | `learnAssess` | `assess` | 题库、组卷、测试和作答、判分、核对出的题目问题、"考我一下" |
 | `learnCurriculum` | `curriculum` | 路线、阶段、课时、任务、设计书、复盘和带过来的知识点 |
-| `learnTextbook` | `textbook` | 课时教材的状态、块索引、局部修订 |
+| `learnTextbook` | `textbook` | 讲义的状态（按课时问，答它所在阶段的）、块索引、段落修改 |
 | `learnLearner` | `learner` | 节点的掌握状态和理由、证据记录 |
 | `learnAnnotation` | `annotation` | 批注、转侧边提问、报错提案 |
 | `learnSidechat` | `sidechat` | 开侧边会话、判断会话能不能用某个工具（`checkTool`）、结束与总结、起草的修改建议 |
@@ -142,7 +143,7 @@
 | `learning/source-updated`、`learning/import-changed`、`learning/web-changed` | `library` | 只推给页面 |
 | `learning/identity-changed` | `knowledge`（合并或撤销合并后） | `learner`（重算） |
 | `learning/extraction-changed` | `knowledge` | 只推给页面 |
-| `learning/stage-changed` | `curriculum` | `textbook`（确认设计书后生成教材） |
+| `learning/stage-changed` | `curriculum` | `textbook`（确认设计书后生成讲义） |
 | `learning/roadmap-revised`、`learning/task-done` | `curriculum` | 只推给页面 |
 | `learning/task-published` | `curriculum` | `curriculum` |
 | `learning/test-finished` | `assess`（交卷判分后） | `curriculum`（完成测试任务、推进阶段） |
@@ -173,7 +174,7 @@
 
 ### 7.2 变更推送
 
-推送通道是 `/api/learning/feed`（服务端持续推送）：§6 的事件，加上教材生成进度 `learning/textbook-progress`。页面收到后重新查询；`kit` 的 `useLoad` 默认收到任何 `learning/` 推送就刷新，页面不在前台时不刷新，回到前台再刷新一次。
+推送通道是 `/api/learning/feed`（服务端持续推送）：§6 的事件，加上讲义生成进度 `learning/textbook-progress`。页面收到后重新查询；`kit` 的 `useLoad` 默认收到任何 `learning/` 推送就刷新，页面不在前台时不刷新，回到前台再刷新一次。
 
 ### 7.3 插槽
 
@@ -189,7 +190,7 @@
 | `learning.figure` | `shell` | 资料里的一张图，由 `library` 画；页面用 `learnShell.Figure` |
 | `learning.course-section` | `curriculum` 的课程进度页 | 进度页上的区块（目标、阶段、任务、测试……） |
 | `learning.chat-card` | 主老师页 | 工具调用成功后显示的卡片，按工具名（如 `offer_goal_options`） |
-| `learning.reader-notes` | 教材阅读器 | 段落旁的批注菜单和段落下的批注（`annotation`） |
+| `learning.reader-notes` | 讲义阅读器 | 段落旁的批注菜单和段落下的批注（`annotation`） |
 | `learning.source-notes` | 资料阅读器 | 识别文字旁的批注（`annotation`） |
 | `learning.settings.services` | 设置页 | "资料服务"里各单元的设置区块 |
 
@@ -197,18 +198,18 @@
 
 ### 7.4 外壳的前端服务 `learnShell`
 
-登记图标栏按钮和角标；打开页面（默认在当前标签，可以新标签、右侧分屏或右侧栏，见 `OpenOptions`）；页面钩子 `usePage()`（是否在前台、在标签还是右侧栏、改标签标题）；当前页面、当前界面（主界面或哪门课）、进出课程；发布和读取选中内容；共用的推送连接；调用 `/api/learning/*` 的 `call`；共用的 Markdown 渲染（公式、教材块、引用框、出处标签）和 `Figure`。
+登记图标栏按钮和角标；打开页面（默认在当前标签，可以新标签、右侧分屏或右侧栏，见 `OpenOptions`）；页面钩子 `usePage()`（是否在前台、在标签还是右侧栏、改标签标题）；当前页面、当前界面（主界面或哪门课）、进出课程；发布和读取选中内容；共用的推送连接；调用 `/api/learning/*` 的 `call`；共用的 Markdown 渲染（公式、讲义块、引用框、出处标签）和 `Figure`。
 
 ### 7.5 页面上下文
 
-页面、批注和侧边会话共用 `Selection`：`{ page, courseId?, selected?: { kind, id?, quote?, label } }`，`kind` 是教材块、节点、阶段、课时、任务、题目、作答、资料片段、资料或一段文字；`quote` 是选中的原文和前后文。
+页面、批注和侧边会话共用 `Selection`：`{ page, courseId?, selected?: { kind, id?, quote?, label } }`，`kind` 是讲义块、节点、阶段、课时、任务、题目、作答、资料片段、资料或一段文字；`quote` 是选中的原文和前后文。
 
 ## 8. 和 Agent 之间
 
 - **两个预设：** `teacher`（主老师，默认预设）和 `side-chat`（侧边会话），写在 `packages/app/cordis.patch.yml`。主老师开课时一个会话（目标、摸底、路线、第一阶段设计），之后每个阶段一个；侧边会话和主老师隔离。
 - **工具** 名称是"动词_对象"（如 `search_library`、`publish_task`）。每个单元的工具是一个插件条目 `@learning-agent/<单元>/tools`，预设只挂自己需要的：主老师挂 library、knowledge、goal、assess、curriculum、textbook、tutor 的工具；侧边会话挂 library 和 sidechat 的工具，每次调用先经 `learnSidechat.checkTool`（只能用 `search_library`、`read_section`、`draft_proposal`；课程有进行中的测试时都不能用）。两个预设都不挂 DSH 的 shell、文件写入、`web_search` 这类工具。
 - **注入会话的消息** 带来源，聊天里不显示成学习者的话：`learning-course-brief`（课程简报）、`learning-handoff`（进度通知）、`learning-next-step`（一轮中途的下一步更新）、`learning-side-chat-context`、`learning-side-chat-policy`。
-- **一次性调用**（判分、写教材、整理记录）不开会话，走 `kit` 的 `complete()`，按角色设置选模型（[packages/AGENTS.md](../packages/AGENTS.md)"调用模型"）。
+- **一次性调用**（判分、写讲义、整理记录）不开会话，走 `kit` 的 `complete()`，按角色设置选模型（[packages/AGENTS.md](../packages/AGENTS.md)"调用模型"）。
 
 ## 9. 为什么这样定
 

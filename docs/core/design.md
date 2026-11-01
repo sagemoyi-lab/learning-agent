@@ -20,7 +20,7 @@
 ## 课程文件和变更日志
 
 - 课程文件只经 `files.write`、`files.append` 写入。每次写入记一条变更（谁改的、大改还是小改、修改前后的全文、对应的提案），写盘成功后发 `learning/doc-changed`。
-- `write` 的 `ifHash`：文件当前的内容指纹不是它就不写，报 `learning/core/conflict`；`null` 表示只在文件不存在时写。教材生成和局部修订靠它不覆盖期间的修改。
+- `write` 的 `ifHash`：文件当前的内容指纹不是它就不写，报 `learning/core/conflict`；`null` 表示只在文件不存在时写。讲义生成和修改靠它不覆盖期间的修改。
 - `files.read` 按内容指纹发现在应用外面改过的文件，记成一次学习者的修改，不会悄悄丢失。
 - 数据库记录的修改由主人单元自己做，再用 `changes.record` 记下前后快照；变更可以带课程和操作组（knowledge 的结构修改），`changes.list` 能按操作组过滤，`get` 读单条。
 - `changes.revert` 把一次文件变更的修改前内容写回，记成一次新的变更。知识结构的撤销由 knowledge 自己做。
@@ -39,7 +39,7 @@ DSH 的会话头里不能存我们的信息，所以每个会话属于哪门课�
 
 - `api.endpoint` 在 `/api/learning/<单元>.<方法>` 注册一个精确路由，挂在 DSH 已认证的通道上，沿用 DSH 的 RPC 信封；请求用契约的数据格式校验。不拦截整个 `/api`，那属于 DSH 的网关。
 - 出错时返回 `{ code, message, details }`：处理函数抛 `LearningApiError` 选错误码；校验失败是 `learning/invalid-input`，`message` 把各条说明连成一句话，`details.issues` 是原始结果。
-- 推送通道 `/api/learning/feed`（服务端持续推送）把契约里的 `FEED_EVENTS` 自动转给打开的页面；单元可以用 `feed.publish` 推别的消息（如教材的生成进度）。
+- 推送通道 `/api/learning/feed`（服务端持续推送）把契约里的 `FEED_EVENTS` 自动转给打开的页面；单元可以用 `feed.publish` 推别的消息（如讲义的生成进度）。
 
 ## 数据与接口
 

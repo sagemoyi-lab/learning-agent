@@ -60,13 +60,13 @@ describe('curriculum store', () => {
     expect(() => store.insertRemedial(done, { title: '再补', objective: '', nodeIds: [newId('node')] })).toThrow(/已经开始，补课阶段插不进去/)
   })
 
-  it('maps lessons to textbook and record files, keeping started lessons', () => {
+  it('maps lessons to the handout of their stage and their own record files, keeping started lessons', () => {
     const { stages } = store.applyRoadmap(courseId, [{ title: '流体流动', objective: '' }])
     const stage = stages[0]!
     const lessons = store.applyLessons(stage, [{ number: '1.1', title: '概述' }, { number: '1.2', title: '流体静力学' }])
     expect(lessons.map(lesson => [lesson.textbookFile, lesson.recordFile])).toEqual([
-      ['stages/01-流体流动/textbook/1.1-概述.md', 'stages/01-流体流动/lessons/1.1.md'],
-      ['stages/01-流体流动/textbook/1.2-流体静力学.md', 'stages/01-流体流动/lessons/1.2.md'],
+      ['stages/01-流体流动/handout.md', 'stages/01-流体流动/lessons/1.1.md'],
+      ['stages/01-流体流动/handout.md', 'stages/01-流体流动/lessons/1.2.md'],
     ])
     store.saveLesson({ ...lessons[0]!, status: 'in-progress' })
     const again = store.applyLessons(stage, [{ number: '1.1', title: '概述（改）' }])

@@ -115,7 +115,7 @@ function SourceItem({ row, tree, lessons, shell, open, onToggle, showing, isOpen
   const cited = usesText(lessons)
   // A page kept under its address as the title names the kind of page instead of the address again.
   const where = source.title === siteOf(source) ? (source.origin.kind === 'web' && source.origin.format === 'pdf' ? '网上 PDF' : '网页') : siteOf(source)
-  const sub = web ? `${AUTHORITY_LABEL[source.authority]} · ${cited || where}` : cited || '教材还没引用'
+  const sub = web ? `${AUTHORITY_LABEL[source.authority]} · ${cited || where}` : cited || '讲义还没引用'
   const context = (event: MouseEvent) => { event.preventDefault(); onMenu({ x: event.clientX, y: event.clientY }) }
   return (
     <div className="la-tree-group">

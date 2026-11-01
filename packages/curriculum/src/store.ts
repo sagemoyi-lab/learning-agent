@@ -8,8 +8,8 @@ import {
   Task,
   lessonRecordFile,
   newId,
+  handoutFile,
   stageFolder,
-  textbookFile,
   type Migration,
 } from '@learning-agent/contracts'
 
@@ -187,7 +187,7 @@ export class CurriculumStore {
         number: draft.number,
         title: draft.title,
         status: 'not-started',
-        textbookFile: textbookFile(stage.folder, draft.number, draft.title),
+        textbookFile: handoutFile(stage.folder),
         recordFile: lessonRecordFile(stage.folder, draft.number),
       }))
     })

@@ -35,7 +35,7 @@ it('takes an error report from the textbook to the teacher and back to the note'
   const brief = await ctx.learnTutor.brief(courseId, '')
   expect(brief).toContain('## 待处理的修改提案')
   expect(brief).toContain(first.proposalId)
-  expect(brief).toContain(`教材 1.1 静水压强（${lesson.id}）`)
+  expect(brief).toContain(`讲义 1.1 静水压强（${lesson.id}）`)
   expect(brief).toContain(`段落 ^${blockId}`)
   expect(brief).toContain('少了符号')
 

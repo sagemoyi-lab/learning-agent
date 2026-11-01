@@ -14,10 +14,14 @@ export const EMBED_LINE = new RegExp(`^!\\[\\[\\s*(${ID})(?:\\s*(?:\\.\\.|…|~|
 /** An embed anywhere in a line, for one the writer left inside a paragraph. */
 export const EMBED_ANYWHERE = new RegExp(`!\\[\\[\\s*(${ID})(?:\\s*(?:\\.\\.|…|~|～|—|–|-)\\s*(${LAST}))?\\s*\\]\\]`, 'g')
 
-/** Where embeds may come from: the lesson's material in reading order, and single chunks found for a gap. */
+/**
+ * Where embeds may come from: the material in reading order, and single chunks found for a gap. A handout
+ * cites worked examples instead of copying them in (`examples: false`, 11-01).
+ */
 export interface EmbedSource {
   readonly order: readonly CitedChunk[]
   readonly extra: readonly CitedChunk[]
+  readonly examples?: boolean
 }
 
 /** What a solution's first chunk usually starts with, after the example it follows. */
@@ -40,6 +44,7 @@ export function expandEmbed(from: string, last: string | undefined, source: Embe
   if (chunks.some((chunk, index) => chunk.kind === 'heading' && index > 0)) return { error: `${from}..${to} 跨了小标题` }
   const own = chunks.filter(chunk => chunk.kind !== 'heading')
   if (own.length === 0) return { error: `${from} 是小标题，不用嵌入` }
+  if (source.examples === false && (own[0]!.kind === 'example' || source.order[at - 1]?.kind === 'example')) return { error: `${from} 是例题，讲义里写成出处标签，不整题放进来` }
   // An example with what follows it: the problem, then its solution folded.
   if (own[0]!.kind === 'example' && own.length > 1) return { boxes: [box(own.slice(0, 1), false), box(own.slice(1), true)] }
   const before = source.order[at - 1]

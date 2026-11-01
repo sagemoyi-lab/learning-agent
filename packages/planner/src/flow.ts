@@ -50,7 +50,7 @@ export function mainStep(ctx: Context, courseId: string, goal: GoalDoc | undefin
     return step(`report.write:${final.id}`, 'teacher', '写课程报告', '简报里有按目标条目的结果和依据。先处理等复核的题和申诉，再用 save_course_report 写课程报告，写好后课程标为"已结课"。', 'tutor.chat')
   }
   if (stage.status === 'planned') return step(`stage.design:${stage.id}`, 'teacher', `设计阶段 ${stage.index}`, `用 save_stage_design 为阶段 ${stage.index}「${stage.title}」（${stage.id}）写设计书：先写阶段验收和测试蓝图，再写节点、课时（一个课时对应骨架教材的一个小节）。`, 'tutor.chat')
-  if (stage.status === 'designing' && !stage.designConfirmedAt) return step(`stage.confirm:${stage.id}`, 'learner', `确认阶段 ${stage.index} 的设计书`, '到"课程进度"页阅读设计书，没问题就点"确认设计，生成教材"。', 'curriculum.progress')
+  if (stage.status === 'designing' && !stage.designConfirmedAt) return step(`stage.confirm:${stage.id}`, 'learner', `确认阶段 ${stage.index} 的设计书`, '到"课程进度"页阅读设计书，没问题就点"确认，生成讲义"。', 'curriculum.progress')
   // From stage 2 on, a short pretest while the textbook is written (stage 1 has the course's diagnostic;
   // a remedial stage follows its stage test). One withdrawn, or ended with nothing answered, is passed over.
   if (stage.index > 1 && stage.kind === 'normal') {
@@ -58,21 +58,20 @@ export function mainStep(ctx: Context, courseId: string, goal: GoalDoc | undefin
     if (!pretest) return step(`pretest.publish:${stage.id}`, 'teacher', `出阶段 ${stage.index} 的前测`, `给本阶段的核心知识点各导入一两道能当场判分的短题（import_exercises，pool 填 practice），再用 start_test(kind="pretest") 发布，最多 5 题；结果用来决定本阶段从哪里讲起。`, 'tutor.chat')
     if (pretest.status === 'open') return doTest(pretest, `做阶段 ${stage.index} 的前测`, '几道题，不算成绩，不会就点"不会"。')
   }
-  // Lessons in order; each needs its textbook before its reading task. The stage becomes ready
-  // with its first lesson's textbook, so later lessons may still be generating.
+  // Lessons in order; each is read in the stage's handout, which is written whole before the stage is ready.
   for (const lesson of learnCurriculum.lessons(stage.id)) {
     if (lesson.status === 'done') continue
     const textbook = learnTextbook.status(lesson.id)
-    if (textbook.state === 'running') return step(`textbook.wait:${lesson.id}`, 'none', `等教材 ${lesson.number} 生成`, `${textbook.message || '正在生成'}。长的小节要十几分钟，生成好了主老师会接着上课。`, 'textbook.reader', { id: lesson.id })
-    if (textbook.state === 'failed' && (textbook.failures ?? 1) >= 2) return step(`textbook.retry:${lesson.id}`, 'learner', `教材 ${lesson.number} 生成失败`, `已经连续失败 ${textbook.failures} 次，最近一次的原因：${textbook.message}。可以稍后在教材页点"生成本节教材"再试。`, 'textbook.reader', { id: lesson.id })
-    if (textbook.state === 'failed') return step(`textbook.regenerate:${lesson.id}`, 'teacher', `教材 ${lesson.number} 生成失败`, `失败原因：${textbook.message}。告诉学习者发生了什么，然后用 regenerate_textbook（lessonId="${lesson.id}"）重试一次；再失败就请学习者稍后在教材页点"生成本节教材"。`, 'tutor.chat')
-    if (textbook.state === 'missing') return step(`textbook.write:${lesson.id}`, 'teacher', `生成教材 ${lesson.number}`, `课时 ${lesson.number} ${lesson.title} 还没有教材，用 regenerate_textbook（lessonId="${lesson.id}"）生成。`, 'tutor.chat')
+    if (textbook.state === 'running') return step(`textbook.wait:${lesson.id}`, 'none', `等讲义生成`, `${textbook.message || '正在生成'}。一章的讲义要写一阵，写好的部分可以先在讲义页读；生成好了主老师会接着上课。`, 'textbook.reader', { id: lesson.id })
+    if (textbook.state === 'failed' && (textbook.failures ?? 1) >= 2) return step(`textbook.retry:${lesson.id}`, 'learner', `讲义生成失败`, `已经连续失败 ${textbook.failures} 次，最近一次的原因：${textbook.message}。可以稍后在讲义页点"生成讲义"再试。`, 'textbook.reader', { id: lesson.id })
+    if (textbook.state === 'failed') return step(`textbook.regenerate:${lesson.id}`, 'teacher', `讲义生成失败`, `失败原因：${textbook.message}。告诉学习者发生了什么，然后用 regenerate_textbook（lessonId="${lesson.id}"）重试一次；再失败就请学习者稍后在讲义页点"生成讲义"。`, 'tutor.chat')
+    if (textbook.state === 'missing') return step(`textbook.write:${lesson.id}`, 'teacher', `生成讲义`, `阶段 ${stage.index}「${stage.title}」还没有讲义，用 regenerate_textbook（lessonId="${lesson.id}"）生成。`, 'tutor.chat')
     const read = learnCurriculum.tasks(courseId, { lessonId: lesson.id }).find(task => task.kind === 'read')
     if (!read) return step(`read.publish:${lesson.id}`, 'teacher', `发布 ${lesson.number} 的阅读任务`, `用 publish_task 发布课时 ${lesson.number} ${lesson.title}（${lesson.id}）的阅读任务，写清读哪里。`, 'tutor.chat')
-    if (read.status === 'open') return step(`read.do:${read.id}`, 'learner', `读教材 ${lesson.number} ${lesson.title}`, '读完点教材末尾的"读完了"（或在"课程进度"页点"完成"），也可以告诉主老师。读的时候随时可以选中一句话，在右侧提问。', 'textbook.reader', { id: lesson.id })
+    if (read.status === 'open') return step(`read.do:${read.id}`, 'learner', `读讲义 ${lesson.number} ${lesson.title}`, '读完点这一节末尾的"读完了"（或在"课程进度"页点"完成"），也可以告诉主老师。读的时候随时可以选中一句话，在右侧提问。', 'textbook.reader', { id: lesson.id })
     // A withdrawn quiz is published again; the lesson summary needs one handed in.
     const quiz = learnAssess.tests(courseId, { lessonId: lesson.id, kind: 'quiz' }).filter(test => test.status !== 'abandoned').at(-1)
-    if (!quiz) return step(`quiz.publish:${lesson.id}`, 'teacher', `出 ${lesson.number} 的小测`, `先 read_lesson_textbook 读本节教材，再出 2–3 道凭记忆作答的小测题（先用 import_exercises 导入本节习题，没有合适的再 add_problems），用 start_test(kind="quiz", lessonId="${lesson.id}") 发布。`, 'tutor.chat')
+    if (!quiz) return step(`quiz.publish:${lesson.id}`, 'teacher', `出 ${lesson.number} 的小测`, `先 read_lesson_textbook 读讲义里这一节，再出 2–3 道凭记忆作答的小测题（先用 import_exercises 导入本节习题，没有合适的再 add_problems），用 start_test(kind="quiz", lessonId="${lesson.id}") 发布。`, 'tutor.chat')
     if (quiz.status === 'open') return doTest(quiz, `做 ${lesson.number} 的小测`, '凭记忆作答。')
     return step(`lesson.summary:${lesson.id}`, 'teacher', `${lesson.number} 的汇报和小结`, `用 get_test_result 看小测结果，请学习者用一两句话说说学到了什么、哪里还不清楚，然后 write_lesson_summary 写小结（lessonId="${lesson.id}"）。`, 'tutor.chat')
   }

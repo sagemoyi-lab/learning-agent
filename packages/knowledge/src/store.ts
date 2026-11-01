@@ -462,7 +462,7 @@ export class KnowledgeStore {
       if (!problem) throw new LearningApiError('learning/knowledge/invalid-link', '题目来源不存在')
       if (parsed.relation === 'assesses' && !problem.nodeIds.includes(parsed.nodeId)) throw new LearningApiError('learning/knowledge/invalid-link', '题库没有将这道题登记为考查该节点')
     }
-    if (target.kind === 'block' && (target.courseId !== courseId || !this.blockExists(target.courseId, target.id))) throw new LearningApiError('learning/knowledge/invalid-link', '教材块不属于本课或不存在')
+    if (target.kind === 'block' && (target.courseId !== courseId || !this.blockExists(target.courseId, target.id))) throw new LearningApiError('learning/knowledge/invalid-link', '讲义段落不属于本课或不存在')
     const targetRef = linkTarget(parsed), before = this.current(targetRef) as NodeLink | undefined
     if (before?.status === 'inactive' && !restore) return
     this.save(targetRef, NodeLink.parse({ ...parsed, version: before?.version ?? 1 }), pending)
@@ -580,7 +580,7 @@ export class KnowledgeStore {
         return { ...link, label: problem ? problem.pool === 'test-reserved' ? '测试预留题（题干不在此展示）' : '练习题' : '题目不可用', available: !!problem }
       }
       const block = this.refs.blockIds(target.courseId).includes(target.id)
-      return { ...link, label: block ? '课程教材段落' : '教材段落不可用', available: block }
+      return { ...link, label: block ? '课程讲义段落' : '讲义段落不可用', available: block }
     })
     const edges = this.edges().filter(edge => (edge.from === id || edge.to === id) && (edge.scope.kind === 'global' || edge.scope.courseId === courseId)).map(edge => {
       const issue = edge.status === 'valid' ? this.edgeIssue(edge) : undefined

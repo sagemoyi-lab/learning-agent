@@ -10,7 +10,7 @@ const VERDICT = {
 } as const
 const HELP = { hint: '提示', explanation: '讲解', 'worked-solution': '完整解法', 'answer-revealed': '答案' } as const
 const VIA = { teacher: '主老师', 'side-chat': '侧边提问', 'test-page': '测试页' } as const
-const SEEN = { homework: '作业里', practice: '练习里', test: '测试里', textbook: '教材里' } as const
+const SEEN = { homework: '作业里', practice: '练习里', test: '测试里', textbook: '讲义里' } as const
 const REVIEWED = { keep: '核对后没有问题', fixed: '核对出有错，改正了', retired: '核对出有错，停用了' } as const
 
 export function conditionsText(conditions: TestConditions): string {

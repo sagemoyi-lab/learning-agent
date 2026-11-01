@@ -69,13 +69,13 @@ describe('graph model', () => {
     expect(buildModel(nodes, edges, options({ selected: 'b' }), colors).nodes.find(n => n.id === 'b')).toMatchObject({ size: nodeRadius(2) + 3, forceLabel: true })
   })
 
-  it('adds one ring per material and one per course textbook, linked only to drawn nodes', () => {
+  it('adds one ring per material and one per course handout, linked only to drawn nodes', () => {
     const sources: KnowledgeSourceLayer = {
       sources: [{ id: 'so1', title: '合成资料', links: [{ nodeId: 'a', chunks: [{ id: 'ck1', citation: '《合成资料》p.1' }] }, { nodeId: 'hidden', chunks: [] }] }, { id: 'so2', title: '无关资料', links: [{ nodeId: 'hidden', chunks: [] }] }],
       textbooks: [{ courseId: 'c1', nodeIds: ['a', 'b'] }],
     }
     const model = buildModel([node('a'), node('b')], [], options({ sources }), colors)
-    expect(model.nodes.filter(n => n.type === 'source').map(n => [n.id, n.label])).toEqual([['src:so1', '合成资料'], ['tb:c1', '甲课 · 课程教材']])
+    expect(model.nodes.filter(n => n.type === 'source').map(n => [n.id, n.label])).toEqual([['src:so1', '合成资料'], ['tb:c1', '甲课 · 课程讲义']])
     expect(model.edges.map(e => e.id).sort()).toEqual(['src:so1>a', 'tb:c1>a', 'tb:c1>b'])
   })
 

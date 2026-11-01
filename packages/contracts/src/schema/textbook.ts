@@ -23,6 +23,8 @@ export const Block = z.object({
   unverified: z.boolean(),
   /** Source text the program copied in as it is (a `> [!quote]` box): never rewritten, never checked. */
   original: z.boolean().default(false),
+  /** The lesson whose section of a handout the block is in; none for the chapter's own parts (本章速览, 易混点, 题型与方法). */
+  lessonId: idOf('lesson').optional(),
 })
 export type Block = z.infer<typeof Block>
 

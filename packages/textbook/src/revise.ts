@@ -1,14 +1,14 @@
-// Local revision of a lesson (docs/textbook/design.md, 局部修订): the model rewrites only the paragraphs
-// named, the program puts them back in place. A rewritten paragraph keeps its id, extra paragraphs get
-// new ones, a removed paragraph is recorded with where it went. Quote boxes of source text are never
-// rewritten. Pure helpers; the call is in index.ts.
+// Local revision of a handout (docs/textbook/design.md, 局部修订): the model rewrites only the paragraphs
+// named, the program puts them back in place; the learner's own edits go the same way without a model. A
+// rewritten paragraph keeps its id, extra paragraphs get new ones, a removed paragraph is recorded with where
+// it went. Quote boxes of source text are never rewritten. Pure helpers; the call is in index.ts.
 import { isOriginal } from './embed.ts'
 import { finalize, indexBlocks, splitPieces, type FinalizeOptions } from './format.ts'
 
-export const REVISER_SYSTEM = `你修改一节教材里指定的几段讲解。教材由讲解和资料原文组成：讲解是写给学习者的话，原文由程序从资料里原样放进来。规则：
+export const REVISER_SYSTEM = `你修改一份讲义里指定的几段讲解。讲义是配合原书读的简洁笔记，由讲解和资料原文组成：讲解是写给学习者的话，原文由程序从资料里原样放进来。规则：
 1. 讲解用自己的话，按"修改要求"改；事实只能来自给出的资料片段，不使用你自己的知识；资料里没有的内容不写。
-2. 讲事实的句子末尾标出处，格式 [《书名》p.页码](cite:片段ID)，片段 ID 只能是"资料片段"里列出的 ID。
-3. 公式、图、表、例题和解答不要自己重写：要放原文时单独一行写 ![[片段ID]]，连续几段写 ![[第一段ID..最后一段ID]]，程序会放进原文。正文段落不嵌入。行内公式只写资料里原样出现的式子或单个符号，不变形、不推导新式子。
+2. 每段末尾标出处，格式 [《书名》p.页码](cite:片段ID)，片段 ID 只能是"资料片段"里列出的 ID。
+3. 公式、图、表不要自己重写：要放原文时单独一行写 ![[片段ID]]，程序会放进原文；正文段落和例题不嵌入。行内公式只写资料里原样出现的式子或单个符号，不变形、不推导新式子。
 4. 只改"要改的段落"；"前后文"只用来衔接，不要输出。不写习题、小测题或测试安排，正文里不要出现内部编号（kn_ 等；出处和嵌入里的片段 ID 除外）。
 5. 输出格式：每个要改的段落先单独写一行 [[段落 编号]]，下面写改好的内容，可以拆成几段；要删掉的段落在这一行下面只写"（删除）"；不需要改的段落不要输出。不要前言后语，不要代码块包裹。`
 
@@ -24,7 +24,7 @@ export interface RevisionInput {
 
 export function revisionPrompt(input: RevisionInput): string {
   return [
-    `# 小节\n${input.heading}`,
+    `# 讲义\n${input.heading}`,
     `# 修改要求\n${input.instruction}`,
     `# 要改的段落\n${input.targets.map(target => `[[段落 ${target.id}]]\n${target.text}`).join('\n\n')}`,
     input.around.length ? `# 前后文（不要输出）\n${input.around.map(item => `（${item.after}）\n${item.text}`).join('\n\n')}` : '',

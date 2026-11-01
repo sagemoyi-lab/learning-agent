@@ -222,7 +222,7 @@ export function buildModel(nodes: readonly GraphNodeInput[], edges: readonly Gra
       const targets = textbook.nodeIds.filter(id => drawnIds.has(id))
       if (!targets.length) continue
       const course = options.courses.find(item => item.id === textbook.courseId)
-      const title = options.courses.length > 1 && course ? `${course.title} · 课程教材` : '课程教材'
+      const title = options.courses.length > 1 && course ? `${course.title} · 课程讲义` : '课程讲义'
       sourceNodes.push(sourceNode(`tb:${textbook.courseId}`, title, 'textbook', colors))
       for (const id of targets) sourceEdges.push({ id: `tb:${textbook.courseId}>${id}`, source: `tb:${textbook.courseId}`, target: id, arrow: false, color: colors.line, size: 0.8, faded: false })
     }
@@ -276,5 +276,5 @@ export function buildModel(nodes: readonly GraphNodeInput[], edges: readonly Gra
 }
 
 function sourceNode(id: string, title: string, kind: 'source' | 'textbook', colors: GraphColors): DrawNode {
-  return { id, label: title, kind, type: 'source', color: colors.muted, baseColor: colors.muted, labelColor: colors.text, size: 4, subtitle: kind === 'textbook' ? '课程教材' : '资料', faded: false, forceLabel: false, zIndex: 1 }
+  return { id, label: title, kind, type: 'source', color: colors.muted, baseColor: colors.muted, labelColor: colors.text, size: 4, subtitle: kind === 'textbook' ? '课程讲义' : '资料', faded: false, forceLabel: false, zIndex: 1 }
 }

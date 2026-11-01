@@ -192,7 +192,7 @@ export function placeAnnotation(
 ): AnnotationLocation {
   const { anchorHash, previous, at } = options
   const base = (fields: Omit<AnnotationLocation, 'checkedAt'>): AnnotationLocation => ({ ...fields, checkedAt: at })
-  if (candidates.length === 0) return base({ status: 'original-only', reason: '这一段已经不在教材里了，批注和原句还保留着' })
+  if (candidates.length === 0) return base({ status: 'original-only', reason: '这一段已经不在讲义里了，批注和原句还保留着' })
 
   const held = previous?.confirmedAt ? candidates.find(candidate => candidate.blockId === previous.blockId && candidate.hash === previous.hash) : undefined
   if (held) return base({ status: 'anchored', blockId: held.blockId, hash: held.hash, confirmedAt: previous!.confirmedAt! })

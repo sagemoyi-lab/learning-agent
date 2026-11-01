@@ -62,7 +62,7 @@ export function LocalGraphPanel({ shell, courseId, openNode }: { shell: LearnShe
     if (focus.kind === 'lesson') {
       if (lesson.loading && lesson.data === undefined) return undefined
       const found = lesson.data
-      if (found) return { icon: BookOpen, title: `${found.lesson.number} ${found.lesson.title}`, ids: own(found.nodeIds), empty: found.from === 'textbook' ? '这节教材还没关联知识点' : '这节还没写好，原文里也还没找到对应的知识点' }
+      if (found) return { icon: BookOpen, title: `${found.lesson.number} ${found.lesson.title}`, ids: own(found.nodeIds), empty: found.from === 'textbook' ? '这一节讲义还没关联知识点' : '这节还没写好，原文里也还没找到对应的知识点' }
     }
     return stage ? { icon: Target, title: stage.title, ids: own(stage.nodeIds), empty: '' } : { icon: Target, title: '本课', ids: [], empty: '还没有排进阶段的知识点' }
   }, [page, byId, focusKey, lesson.data, lesson.loading, stage])

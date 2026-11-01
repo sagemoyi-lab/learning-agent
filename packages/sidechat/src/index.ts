@@ -159,16 +159,19 @@ class LearnSidechatService extends Service implements LearnSidechat {
     if (target === 'goal') return { targets: [{ kind: 'file', courseId, path: COURSE_LAYOUT.goal }], label: '目标说明' }
     const selected = link.openedFrom?.selected
     const curriculum = this.ctx.get('learnCurriculum')
-    const lessonFile = (file: string) => {
+    // A handout is the file its lessons share: named by the lesson whose section the paragraph is in, else by its stage.
+    const lessonFile = (file: string, lessonId?: string) => {
+      const target = [{ kind: 'file' as const, courseId, path: file }]
+      const lesson = lessonId ? curriculum?.lesson(lessonId) : undefined
+      if (lesson) return { targets: target, label: `讲义 ${lesson.number} ${lesson.title}` }
       for (const stage of curriculum?.stages(courseId) ?? []) {
-        const lesson = curriculum!.lessons(stage.id).find(item => item.textbookFile === file)
-        if (lesson) return { targets: [{ kind: 'file' as const, courseId, path: file }], label: `教材 ${lesson.number} ${lesson.title}` }
+        if (curriculum!.lessons(stage.id).some(item => item.textbookFile === file)) return { targets: target, label: `阶段 ${stage.index} ${stage.title} 的讲义` }
       }
-      return { targets: [{ kind: 'file' as const, courseId, path: file }], label: selected?.label || '教材' }
+      return { targets: target, label: selected?.label || '讲义' }
     }
     const block = async (blockId: string) => {
       const found = await this.ctx.get('learnTextbook')?.block(courseId, blockId)
-      return found ? lessonFile(found.file) : undefined
+      return found ? lessonFile(found.file, found.lessonId) : undefined
     }
     let resolved: { targets: ChangeTarget[]; label: string } | undefined
     if (selected?.id) {
@@ -176,12 +179,12 @@ class LearnSidechatService extends Service implements LearnSidechat {
         throw new LearningApiError('learning/sidechat/problem-target', '题目本身有问题时，请学习者在测试页点「这题有问题」报告，老师会核对这道题；不要起草修改建议。')
       }
       if (selected.kind === 'chunk' || selected.kind === 'source') {
-        throw new LearningApiError('learning/sidechat/source-target', '资料原文不能改：资料里的错误请学习者在资料库页处理；想改的是教材的讲法，请学习者在教材里选中那一段再来提问。')
+        throw new LearningApiError('learning/sidechat/source-target', '资料原文不能改：资料里的错误请学习者在资料库页处理；想改的是讲义的讲法，请学习者在讲义里选中那一段再来提问。')
       }
       if (selected.kind === 'block') resolved = await block(selected.id)
       else if (selected.kind === 'lesson') {
         const file = curriculum?.lesson(selected.id)?.textbookFile
-        if (file) resolved = lessonFile(file)
+        if (file) resolved = lessonFile(file, selected.id)
       } else if (selected.kind === 'stage') {
         const stage = curriculum?.stage(selected.id)
         if (stage) resolved = { targets: [{ kind: 'file', courseId, path: `${stage.folder}/design.md` }], label: `阶段 ${stage.index} ${stage.title} 的设计书` }
@@ -194,7 +197,7 @@ class LearnSidechatService extends Service implements LearnSidechat {
       }
     }
     if (!resolved) {
-      throw new LearningApiError('learning/sidechat/no-target', '这次提问没有选中可以修改的内容：问清学习者要改哪里。教材的某一段请学习者在教材里选中它再来提问；课程路线（阶段的顺序、增删）用 target="roadmap"；目标说明用 target="goal"。')
+      throw new LearningApiError('learning/sidechat/no-target', '这次提问没有选中可以修改的内容：问清学习者要改哪里。讲义的某一段请学习者在讲义里选中它再来提问；课程路线（阶段的顺序、增删）用 target="roadmap"；目标说明用 target="goal"。')
     }
     return resolved
   }

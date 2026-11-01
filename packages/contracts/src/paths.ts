@@ -24,7 +24,9 @@ export const COURSE_LAYOUT = {
 export const STAGE_LAYOUT = {
   design: 'design.md',
   review: 'review.md',
+  /** One file per lesson, written before 11-01; still read. */
   textbook: 'textbook',
+  handout: 'handout.md',
   lessons: 'lessons',
 } as const
 
@@ -43,9 +45,9 @@ export function stageFolder(index: number, title: string): string {
   return `${COURSE_LAYOUT.stages}/${String(index).padStart(2, '0')}-${safeFileName(title)}`
 }
 
-/** `stages/01-流体流动/textbook/1.1-流体静力学.md` */
-export function textbookFile(stageDir: string, number: string, title: string): string {
-  return `${stageDir}/${STAGE_LAYOUT.textbook}/${safeFileName(`${number}-${title}`)}.md`
+/** `stages/01-流体流动/handout.md`: the stage's handout (讲义), which all its lessons share. */
+export function handoutFile(stageDir: string): string {
+  return `${stageDir}/${STAGE_LAYOUT.handout}`
 }
 
 /** `stages/01-流体流动/lessons/1.1.md` */

@@ -33,7 +33,7 @@ function SidechatSettings({ access }: { access: SettingsAccess }): ReactNode {
   if (!values) return <Skeleton lines={2} />
   const restrict = values.restrictDuringTests !== false
   return (
-    <Section title="侧边提问" icon={MessageCircleQuestion} description="在教材、知识模型或测试页上点一下内容，就能针对它提问。">
+    <Section title="侧边提问" icon={MessageCircleQuestion} description="在讲义、知识模型或测试页上点一下内容，就能针对它提问。">
       <div className="la-settings-card">
         <SettingRow title="测试进行中只说明怎么操作" hint="有测试还没交卷时，侧边提问只回答怎么交卷、计时、拍照作答，不查资料，也不讨论题目。关掉后，答疑不受测试影响。">
           <Switch checked={restrict} busy={action.busy} aria-label="测试进行中只说明怎么操作" onChange={checked => action.run(() => access.set(SETTINGS, 'restrictDuringTests', checked ? undefined : false))} />
@@ -59,7 +59,7 @@ function HomeSideChat(): ReactNode {
   const list = (courses.data ?? []).filter(course => course.status !== 'archived')
   if (courses.loading && !courses.data) return <div style={{ padding: 16 }}><Skeleton lines={3} /></div>
   if (list.length === 0) {
-    return <EmptyState icon={MessageCircleQuestion} title="建一门课后可以提问" description="在教材、知识模型或测试页上点一下内容，就能针对它提问。" />
+    return <EmptyState icon={MessageCircleQuestion} title="建一门课后可以提问" description="在讲义、知识模型或测试页上点一下内容，就能针对它提问。" />
   }
   const fromSelection = selection?.courseId && list.some(course => course.id === selection.courseId) ? selection.courseId : undefined
   const courseId = fromSelection ?? (list.some(course => course.id === picked) ? picked : list[0]!.id)
@@ -144,7 +144,7 @@ function CourseSideChat({ courseId }: { courseId: string }): ReactNode {
         ) : (
           <div className="la-callout">
             <MousePointerClick size={16} strokeWidth={1.75} className="la-callout-icon" />
-            <div className="la-callout-body la-callout-text">没有选中内容，会针对整门课回答。在教材、知识模型或测试页上点一下内容，就能针对它提问。</div>
+            <div className="la-callout-body la-callout-text">没有选中内容，会针对整门课回答。在讲义、知识模型或测试页上点一下内容，就能针对它提问。</div>
           </div>
         )}
       </div>

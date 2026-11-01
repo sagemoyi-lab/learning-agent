@@ -1,40 +1,28 @@
-// The check of a lesson's explanation (docs/textbook/design.md, 讲解与原文): source text copied in as it is
-// needs none; each explanation paragraph is checked against the material of its point. The program tests
-// what it can by rule (formulas as the source writes them, numbers, words copied from an exercise or from
-// the material); a check model judges whether a paragraph
-// contradicts the material or adds facts it does not have, and names the chunks it comes from. Pure helpers:
-// the model and library calls are in checker.ts.
+// What the program checks in a handout by rule (docs/textbook/design.md, 程序检查): no model reads it again
+// (11-01: a handout is notes, not every sentence checked). A formula is as the source writes it, the numbers are
+// in the material, nothing is copied from an exercise or names one, and the explanation is not the source copied.
+// Source text copied in and the tables' formulas come from the source and need none. Pure helpers.
 import { parseFrontmatter } from '@learning-agent/contracts'
-import { indexBlocks, splitPieces } from './format.ts'
-import { copiesStem } from './plan.ts'
+import { indexBlocks, isTable, splitPieces } from './format.ts'
+import { NAMES_EXERCISE, copiesStem } from './handout.ts'
 
-/** `unchecked`: the check model gave no usable judgment. */
+/** `unchecked` is only in what older handouts kept: a check model that gave no judgment. */
 export type Verdict = 'ok' | 'unsupported' | 'contradicted' | 'unchecked'
 
 export interface ParagraphCheck {
   readonly verdict: Verdict
   /** What is wrong, in words for the learner; empty when nothing is. */
   readonly note: string
-  /** Chunks the paragraph's content comes from, as the check model named them. */
+  /** Chunks the paragraph's content comes from, as an older check named them. */
   readonly sources: readonly string[]
 }
 
 /** One explanation paragraph to check. */
 export interface Paragraph {
-  /** `P1`, `P2`… within one check call. */
-  readonly id: string
   readonly blockId: string
   /** Without citation links. */
   readonly text: string
   readonly citations: readonly string[]
-}
-
-/** What the check needs to know about a chunk or a web passage. */
-export interface CheckChunk {
-  readonly id: string
-  readonly text: string
-  readonly kind: string
-  readonly citation: string
 }
 
 const CITE = /\[([^\]]*)\]\(cite:([^)\s]+)\)/g
@@ -44,8 +32,8 @@ const isHeading = (piece: string) => /^#{1,6}\s/.test(piece)
 const NOTE = /^>\s*\[!note\]/
 
 /**
- * The explanation paragraphs of a text: not headings, quote boxes of source text, the program's notes of
- * what the material does not explain, or the recall questions of older files.
+ * The explanation paragraphs of a text: not headings, tables (checked by row), quote boxes of source text, the
+ * program's notes of what the material does not explain, or the recall questions of older files.
  */
 export function paragraphsOf(body: string, only?: ReadonlySet<string>): Paragraph[] {
   const out: Paragraph[] = []
@@ -53,10 +41,10 @@ export function paragraphsOf(body: string, only?: ReadonlySet<string>): Paragrap
   for (const piece of splitPieces(parseFrontmatter(body).body)) {
     if (isHeading(piece)) { questions = /读完就答/.test(piece); continue }
     const [block] = indexBlocks(piece)
-    if (!block || questions || block.original || NOTE.test(block.text) || (only && !only.has(block.id))) continue
+    if (!block || questions || block.original || isTable(block.text) || NOTE.test(block.text) || (only && !only.has(block.id))) continue
     const text = block.text.replace(CITE, '').replace(WEB_LINK, '$1').trim()
     if ([...text.replace(/[\s。！？；，、：:.,;-]/g, '')].length < 4) continue
-    out.push({ id: `P${out.length + 1}`, blockId: block.id, text, citations: block.citations })
+    out.push({ blockId: block.id, text, citations: block.citations })
   }
   return out
 }
@@ -116,12 +104,13 @@ export interface Problem {
 }
 
 /**
- * What the program finds wrong with a paragraph by rule, given its point's material: a stretch copied from an
- * exercise, a formula the material does not have as written (formulas stay as the source writes them, 10-31),
- * or numbers the material does not have.
+ * What the program finds wrong with a paragraph by rule, given the material: a stretch copied from an exercise or
+ * an exercise named by its number, a formula the material does not have as written (formulas stay as the source
+ * writes them, 10-31), or numbers the material does not have.
  */
 export function precheck(text: string, material: string, stems: readonly string[]): Problem | undefined {
-  if (copiesStem(text, stems, 14)) return { note: '和课后习题的题干文字相同，可能把题目写进了教材', contradicts: false }
+  if (copiesStem(text, stems, 14)) return { note: '和课后习题的题干文字相同，可能把题目写进了讲义', contradicts: false }
+  if (NAMES_EXERCISE.test(text)) return { note: '提到了习题的题号，讲义只讲方法', contradicts: false }
   const bare = bareTex(material)
   const changed = formulasIn(text).filter(formula => !bare.includes(bareTex(formula)))
   if (changed.length) return { note: `式子 ${changed.slice(0, 2).map(formula => `$${formula}$`).join('、')} 和资料里的写法不一致，公式要和原文一样`, contradicts: true }
@@ -155,66 +144,18 @@ export function copiesOf(material: string, run = COPY_RUN): (text: string) => bo
   }
 }
 
-export const CHECK_SYSTEM = `你核对一节教材里的讲解段落是否忠实于给出的资料。讲解可以换说法、举资料里有的例子、省略细节，但不能和资料矛盾，也不能加入资料里没有的事实（数值、公式、结论、适用条件）。教学性的过渡、提问、学习建议、解题思路和步骤安排、常见错误的提醒不算事实，只要它们用到的事实都在资料里。资料是唯一依据，不要用你自己的知识判断对错。
-对每段给出：
-- verdict：ok（没有矛盾，事实都能在资料里找到）；contradicted（和资料说的相反，或条件、数值、符号、单位不同）；unsupported（有资料里找不到的事实）。
-- sources：这段内容出自哪些片段，写片段 ID（最多 3 个）；网页摘录写它的网址。
-- note：不是 ok 时，用一句话说明哪里不对、资料原文怎么说。
-只输出 JSON：{"results":[{"id":"P1","verdict":"ok","sources":["ck_…"],"note":""}]}`
-
-/** The material of one point and its explanation paragraphs. */
-export function checkPrompt(paragraphs: readonly Paragraph[], chunks: readonly CheckChunk[]): string {
-  const material = chunks.map(chunk => `[${chunk.id}] ${chunk.citation}\n${chunk.text}`).join('\n\n')
-  const lines = paragraphs.map(paragraph => `[${paragraph.id}] ${paragraph.text}`).join('\n\n')
-  return `# 资料\n${material || '（没有）'}\n\n# 要核对的讲解段落\n${lines}`
-}
-
-const VERDICTS = new Set(['ok', 'contradicted', 'unsupported'])
-
-/**
- * Turn a check reply into judgments, by block id. A paragraph the reply leaves out is `unchecked`; sources
- * outside `allowed` are dropped; a problem the program found stands whatever the reply says.
- */
-export function judge(paragraphs: readonly Paragraph[], reply: unknown, allowed: ReadonlySet<string>, found: ReadonlyMap<string, Problem>): Map<string, ParagraphCheck> {
-  type Raw = { readonly id?: unknown; readonly verdict?: unknown; readonly sources?: unknown; readonly note?: unknown }
-  const raw = new Map<string, Raw>()
-  const list = (reply as { results?: unknown })?.results
-  if (Array.isArray(list)) for (const item of list as Raw[]) if (typeof item?.id === 'string') raw.set(item.id.trim(), item)
-  const out = new Map<string, ParagraphCheck>()
-  for (const paragraph of paragraphs) {
-    const item = raw.get(paragraph.id)
-    const verdict = typeof item?.verdict === 'string' && VERDICTS.has(item.verdict) ? item.verdict as Verdict : 'unchecked'
-    const sources = Array.isArray(item?.sources) ? [...new Set((item.sources as unknown[]).filter((id): id is string => typeof id === 'string').map(id => id.trim()).filter(id => allowed.has(id)))].slice(0, 3) : []
-    const note = typeof item?.note === 'string' ? item.note.trim() : ''
-    const problem = found.get(paragraph.id)
-    if (problem) out.set(paragraph.blockId, { verdict: problem.contradicts || verdict === 'contradicted' ? 'contradicted' : 'unsupported', note: [problem.note, verdict !== 'ok' ? note : ''].filter(Boolean).join('；'), sources })
-    else out.set(paragraph.blockId, { verdict, note: verdict === 'ok' ? '' : verdict === 'unchecked' ? '核对模型没有给出这段的判断' : note, sources })
-  }
-  return out
-}
-
 /** Whether a paragraph's check says to read it with care. */
 export function flagged(check: Pick<ParagraphCheck, 'verdict'>): boolean {
   return check.verdict === 'contradicted' || check.verdict === 'unsupported'
+}
+
+/** A problem as the check kept for a paragraph. */
+export function checkOf(problem: Problem): ParagraphCheck {
+  return { verdict: problem.contradicts ? 'contradicted' : 'unsupported', note: problem.note, sources: [] }
 }
 
 /** Why a paragraph is 待核实, for the teacher and the learner. */
 export function reasonOf(text: string, check: ParagraphCheck): string {
   const plain = text.replace(CITE, '').replace(/\s+/g, ' ').trim()
   return `「${[...plain].slice(0, 30).join('')}${[...plain].length > 30 ? '…' : ''}」${check.note || (check.verdict === 'contradicted' ? '和资料不一致' : '资料里找不到依据')}`
-}
-
-/**
- * Add citations to paragraphs that have none, from the chunks the check found them in: every explanation
- * paragraph then opens on the source it comes from.
- */
-export function addSources(body: string, additions: ReadonlyMap<string, readonly CheckChunk[]>): string {
-  if (additions.size === 0) return body
-  return `${splitPieces(body).map(piece => {
-    const [block] = isHeading(piece) ? [] : indexBlocks(piece)
-    const add = block ? additions.get(block.id) : undefined
-    if (!block || !add?.length || block.original) return piece
-    const links = add.map(chunk => `[${chunk.citation}](cite:${chunk.id})`).join('')
-    return piece.replace(/\s\^([0-9a-z]{6})\s*$/, (_, id: string) => ` ${links} ^${id}`)
-  }).join('\n\n')}\n`
 }

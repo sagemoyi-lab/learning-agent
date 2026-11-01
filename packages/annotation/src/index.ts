@@ -174,9 +174,9 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
     if (anchor.kind === 'block') {
       if (anchor.courseId !== course.id) throw new LearningApiError('learning/annotation/wrong-course', '这一段不属于这门课')
       const block = await this.ctx.learnTextbook.block(course.id, anchor.blockId)
-      if (!block) throw new LearningApiError('learning/annotation/block-missing', '这一段已经不在教材里了，刷新页面后再批注')
+      if (!block) throw new LearningApiError('learning/annotation/block-missing', '这一段已经不在讲义里了，刷新页面后再批注')
       if (anchor.quote && !quoteFound(plainText(block.text), anchor.quote)) {
-        throw new LearningApiError('learning/annotation/quote-missing', '选中的文字不在这一段里（教材可能刚刚改过），刷新页面后重新选')
+        throw new LearningApiError('learning/annotation/quote-missing', '选中的文字不在这一段里（讲义可能刚刚改过），刷新页面后重新选')
       }
       this.refuseHalfFormula(block.text, anchor.quote)
       anchor = { ...anchor, hash: block.hash }
@@ -277,7 +277,7 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
     const candidates = await this.candidates(annotation)
     const current = await this.place(annotation)
     if (current.status === 'anchored') return annotation
-    if (candidates.length === 0) throw new LearningApiError('learning/annotation/no-place', '这一段已经不在教材里了，没有可以确认的位置；批注和原句还保留着')
+    if (candidates.length === 0) throw new LearningApiError('learning/annotation/no-place', '这一段已经不在讲义里了，没有可以确认的位置；批注和原句还保留着')
     const target = blockId ? candidates.find(candidate => candidate.blockId === blockId) : candidates.length === 1 ? candidates[0] : undefined
     if (!target) throw new LearningApiError('learning/annotation/pick-block', '这条批注可能在几段里，请指明是哪一段', { blockIds: candidates.map(candidate => candidate.blockId) })
     const at = now()
@@ -292,12 +292,17 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
     return (await this.candidates(annotation)).map(candidate => ({ blockId: candidate.blockId, preview: brief(plainText(candidate.text), 60) }))
   }
 
-  /** Where each note of the course is read: the lesson of its paragraph, or the source it is on. */
+  /**
+   * Where each note of the course is read: the lesson whose section of the handout its paragraph is in (the chapter's
+   * own parts open at the stage's first lesson), or the source it is on.
+   */
   async places(courseId: string): Promise<Record<string, NotePlace>> {
-    const lessonOfFile = new Map<string, NotePlace>()
+    const lessonPlace = new Map<string, NotePlace>()
+    const fileOpening = new Map<string, NotePlace>()
     for (const stage of this.ctx.learnCurriculum.stages(courseId)) {
       for (const lesson of this.ctx.learnCurriculum.lessons(stage.id)) {
-        if (lesson.textbookFile) lessonOfFile.set(lesson.textbookFile, { kind: 'lesson', lessonId: lesson.id, title: `${lesson.number} ${lesson.title}` })
+        lessonPlace.set(lesson.id, { kind: 'lesson', lessonId: lesson.id, title: `${lesson.number} ${lesson.title}` })
+        if (lesson.textbookFile && !fileOpening.has(lesson.textbookFile)) fileOpening.set(lesson.textbookFile, { kind: 'lesson', lessonId: lesson.id, title: `${stage.title} · 讲义` })
       }
     }
     const result: Record<string, NotePlace> = {}
@@ -309,7 +314,7 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
         continue
       }
       const block = await this.ctx.learnTextbook.block(courseId, annotation.location.blockId ?? annotation.anchor.blockId)
-      const place = block ? lessonOfFile.get(block.file) : undefined
+      const place = block ? (block.lessonId ? lessonPlace.get(block.lessonId) : undefined) ?? fileOpening.get(block.file) : undefined
       if (place) result[annotation.id] = place
     }
     return result
@@ -317,7 +322,7 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
 
   sideChatSelection(annotationId: string): Selection {
     const annotation = must(this.read(annotationId), 'annotation', '批注', annotationId)
-    const where = annotation.anchor.kind === 'block' ? '教材' : '资料'
+    const where = annotation.anchor.kind === 'block' ? '讲义' : '资料'
     return {
       page: 'annotation',
       courseId: annotation.courseId,
@@ -393,26 +398,26 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
     const core = this.ctx.learnCore
     if (annotation.type !== 'error') throw new LearningApiError('learning/annotation/not-error', '只有"报错"批注能提交修改提案')
     if (annotation.proposalId) return must(core.proposals.get(annotation.proposalId), 'annotation', '提案', annotation.proposalId)
-    if (annotation.anchor.kind !== 'block') throw new LearningApiError('learning/annotation/no-target', '资料里的错误要在资料库页处理；教材里的错误才能提交修改提案')
+    if (annotation.anchor.kind !== 'block') throw new LearningApiError('learning/annotation/no-target', '资料里的错误要在资料库页处理；讲义里的错误才能提交修改提案')
     const location = await this.place(annotation)
     if (location.status !== 'anchored' || !location.blockId) {
       throw new LearningApiError('learning/annotation/place-unsure', `还不能确定错在哪一处，先确认批注的位置（${location.reason ?? '位置不确定'}）`)
     }
-    const block = must(await this.ctx.learnTextbook.block(annotation.courseId, location.blockId), 'annotation', '教材段落', location.blockId)
+    const block = must(await this.ctx.learnTextbook.block(annotation.courseId, location.blockId), 'annotation', '讲义段落', location.blockId)
     const quote = annotation.anchor.quote?.exact
     const proposal = core.db.transaction(() => {
       const created = core.proposals.create({
         courseId: annotation.courseId,
         source: 'annotation',
         targets: [{ kind: 'file', courseId: annotation.courseId, path: block.file }],
-        summary: `教材报错：${brief(quote ?? plainText(block.text), 30)}`,
+        summary: `讲义报错：${brief(quote ?? plainText(block.text), 30)}`,
         rationale: [`学习者说：${annotation.text}`, quote ? `段落 ^${block.id} 里选中的原句：「${quote}」` : `针对整段 ^${block.id}`].join('\n'),
       })
       this.save({ ...annotation, proposalId: created.id, updatedAt: now(), location })
       return created
     })
     this.changed(annotation)
-    this.ctx.emit('learning/handoff', { courseId: annotation.courseId, unit: 'annotation', text: `学习者在教材上报了一处错误，已生成修改提案：${proposal.summary}。` })
+    this.ctx.emit('learning/handoff', { courseId: annotation.courseId, unit: 'annotation', text: `学习者在讲义上报了一处错误，已生成修改提案：${proposal.summary}。` })
     return proposal
   }
 }
@@ -445,10 +450,10 @@ export function apply(ctx: Context): void {
     const kind = { question: '疑问', understanding: '我的理解', highlight: '重点', error: '报错' }[annotation.type]
     const parts = [`学习者的批注（${kind}）：${annotation.text || '（没有写字，只划了重点）'}`]
     if (annotation.anchor.quote) parts.push(`批注针对的原句：「${annotation.anchor.quote.exact}」`)
-    if (annotation.location.status !== 'anchored') parts.push(`注意：这句话现在在教材里${annotation.location.status === 'original-only' ? '找不到了' : '位置不确定'}（${annotation.location.reason ?? ''}），以学习者当时划的原句为准。`)
+    if (annotation.location.status !== 'anchored') parts.push(`注意：这句话现在在讲义里${annotation.location.status === 'original-only' ? '找不到了' : '位置不确定'}（${annotation.location.reason ?? ''}），以学习者当时划的原句为准。`)
     if (annotation.anchor.kind === 'block' && annotation.location.blockId) {
       const block = await ctx.learnTextbook.block(annotation.courseId, annotation.location.blockId)
-      if (block) parts.push(`所在教材段落：\n${plainText(block.text)}`)
+      if (block) parts.push(`所在讲义段落：\n${plainText(block.text)}`)
     } else if (annotation.anchor.kind === 'chunk') {
       const chunk = ctx.learnLibrary.chunk(annotation.anchor.chunkId)
       if (chunk) parts.push(`所在资料片段（${chunk.citation}）：\n${plainText(chunk.text)}`)

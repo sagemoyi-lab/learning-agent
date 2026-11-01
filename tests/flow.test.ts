@@ -15,7 +15,8 @@ let citation = ''
 
 beforeAll(() => {
   h = createHarness(call => {
-    if (call.purpose === 'learning-textbook') return `## 1.1 静水压强\n\n静水压强按水的深度计算。[合成资料 p.1](cite:${citation})`
+    if (call.purpose === 'learning-textbook-plan') return JSON.stringify({ overview: '', terms: [], formulas: [], needs: [], confusions: [], types: [] })
+    if (call.purpose === 'learning-textbook') return `静水压强按水的深度计算。[合成资料 p.1](cite:${citation})`
     if (call.purpose === 'learning-sidechat-summary') {
       return JSON.stringify({ questions: [{ quote: '水深加倍时会怎样', text: '水深加倍时会怎样？', nodes: ['N1'] }], conclusions: [{ text: '静水压强加倍。', from: 2 }], misconceptions: [], help: [{ reply: 2, level: 'explanation', nodes: ['N1'] }] })
     }
@@ -81,7 +82,7 @@ it('runs the minimal learning flow', async () => {
   expect(ctx.learnLearner.states([nodeId])[0]?.state).toBe('independent')
   expect(await lastNotice()).toMatchObject({ sessionId: opening, mode: 'followup', text: expect.stringContaining('学习者交了摸底（3 题），判分：对、对、对') })
 
-  // 一页阶段设计 → 确认 → 自动生成一节教材 → 阶段就绪，新阶段会话收到"第一次课"的通知
+  // 一页阶段设计 → 确认 → 自动生成本阶段的讲义 → 阶段就绪，新阶段会话收到"第一次课"的通知
   const { stages: [stage] } = await ctx.learnCurriculum.saveRoadmap(course.id, [{ title: '静水压强', objective: '按资料参数独立计算静水压强' }], meta)
   const design = await ctx.learnCurriculum.saveDesign(stage!.id, {
     markdown: '# 阶段设计\n\n## 验收\n\n能算静水压强。\n\n## 测试蓝图\n\n小测：水深 4 m 的数值题（保密）。\n\n## 课时\n\n1.1 静水压强。',
@@ -93,11 +94,15 @@ it('runs the minimal learning flow', async () => {
   expect(await settled).toBe('ready')
   await h.settle()
   expect(ctx.learnCurriculum.stage(stage!.id)?.status).toBe('ready')
-  const kickoff = h.delivered.find(item => item.mode === 'followup' && item.text.includes('教材 1.1 静水压强 已生成'))
+  const kickoff = h.delivered.find(item => item.mode === 'followup' && item.text.includes('讲义 静水压强 已生成'))
   expect(kickoff?.sessionId).not.toBe(opening)
   expect(kickoff?.sessionId).toBe(await ctx.learnTutor.session(course.id))
   expect(kickoff?.text).toContain('第一次课')
-  // The writer sees teaching material only: no exercises, no answers, no test blueprint.
+  // The plan sees the exercise stems, never their answers; the writer sees teaching material only: no exercises,
+  // no answers, no test blueprint.
+  const plan = h.calls.find(call => call.purpose === 'learning-textbook-plan')!.prompt
+  expect(plan).toContain('1-4 水深')
+  expect(plan).not.toContain('40000 Pa')
   const writer = h.calls.find(call => call.purpose === 'learning-textbook')!.prompt
   expect(writer).toContain(citation)
   expect(writer).not.toContain('1-4 水深')

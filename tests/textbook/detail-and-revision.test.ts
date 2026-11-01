@@ -1,180 +1,134 @@
-// textbook (docs/textbook/design.md): the writer is told how to write each knowledge
-// point by the learner's state on it, while coverage and citation rules stay the same; the teacher can
-// rewrite a few paragraphs of explanation and the rest keep their text and ids, while source text copied in
-// is never rewritten; a paragraph the check finds contradicted is rewritten once before the lesson is
-// published; the reader page gets each paragraph's sources and check in the learner's words. Synthetic
-// material; fake model and learner states.
-import { join } from 'node:path'
+// textbook (docs/textbook/design.md): each section's length is set by the learner's state on its knowledge points,
+// and a section written too long is shortened once; the teacher can rewrite a few paragraphs while the rest keep
+// their text and ids, never source text or a table; the learner edits a paragraph in place, its citations shown as
+// short markers and put back, an empty paragraph removed, nothing checked, and a regeneration replaces what they
+// changed. Synthetic material; fake model and learner states.
 import { afterEach, expect, it } from 'vitest'
-import type { Lesson, MasteryState } from '@learning-agent/contracts'
+import type { MasteryState } from '@learning-agent/contracts'
 import * as textbookTools from '../../packages/textbook/src/tools.ts'
-import { FIXTURES, createHarness, textbookSettled, type Harness, type ModelCall } from '../harness.ts'
-import { checkOk, isCheck, isReviser, isWriter, paragraphsOf, textbookReply, titleOf, writePoint } from './fakes.ts'
+import { textbookSettled, type ModelCall } from '../harness.ts'
+import {
+  blockOf, confirm, handoutCourse, handoutText, isReviser, isSection, materialOf, reviseReply, sectionOf, sectionReply, usual,
+  type HandoutCourse, type HandoutOptions, type Reply,
+} from './fakes.ts'
 
-const meta = { actor: 'teacher' as const, reason: '教材 C 测试（合成）' }
+let course: HandoutCourse | undefined
+afterEach(() => course?.h.dispose())
 
-let h: Harness | undefined
-afterEach(() => h?.dispose())
-
-/** The paragraphs a reviser call was asked to rewrite, by id. */
-function targetsOf(call: ModelCall): Map<string, string> {
-  const section = /# 要改的段落\n([\s\S]*?)(?:\n\n# |$)/.exec(call.prompt)![1]!
-  return new Map([...section.matchAll(/\[\[段落 ([0-9a-z]{6})\]\]\n([\s\S]*?)(?=\n\n\[\[段落 |$)/g)].map(match => [match[1]!, match[2]!.trim()]))
-}
-
-const citationOf = (text: string) => /\[[^\]]*\]\(cite:ck_\w+\)/.exec(text)![0]
-
-type Reviser = (targets: Map<string, string>) => string
-/** Corrects the contradicted paragraph from the material; leaves the others as they were. */
-const fixes: Reviser = targets => [...targets].map(([id, text]) => `[[段落 ${id}]]\n${text.includes('一定相等') ? `两点之间隔着另一种液体时，即使在同一高度也不能认为相等。${citationOf(text)}` : text}`).join('\n\n')
-/** Says it rewrote the paragraphs but gives them back unchanged. */
-const same: Reviser = targets => [...targets].map(([id, text]) => `[[段落 ${id}]]\n${text}`).join('\n\n')
-
-interface Options {
-  /** Write the sentence the material contradicts. */
-  readonly contradict?: boolean
-  readonly revise?: Reviser
-}
-
-const NOTE = '原文说隔着另一种液体时同一高度也不能认为压强相等'
-
-function model(cite: Record<string, string>, options: Options) {
-  return (call: ModelCall): string => {
-    if (isCheck(call)) return checkOk(call, text => (text.includes('一定相等') ? { verdict: 'contradicted', note: NOTE } : { verdict: 'ok' }))
-    if (isReviser(call)) return (options.revise ?? same)(targetsOf(call))
-    if (isWriter(call) && titleOf(call) === '压强的含义') {
-      return [
-        '### 压强的含义',
-        `压强是指单位面积上受到的垂直作用力。[合成资料 p.1](cite:${cite.pressure})`,
-        `静止流体里任意一点的压强，朝哪个方向量都一样大。[合成资料 p.1](cite:${cite.isotropic})`,
-      ].join('\n\n')
-    }
-    // Never names the gauge pressure, so the coverage check has something to report.
-    if (isWriter(call) && titleOf(call) === '压强的几种表示') return `### 压强的几种表示\n\n记录压强要写明是哪一种。[合成资料 p.1](cite:${cite.record})`
-    if (isWriter(call) && titleOf(call) === '静力学基本方程') {
-      // Told to compress 等压面, this writer leaves it out: the coverage check must still notice.
-      const compress = /- 等压面：[^\n]*压缩/.test(call.prompt) && !options.contradict
-      return [
-        '### 静力学基本方程',
-        ...compress ? [] : [`同一种静止、连通的液体中，同一水平面上各点的压强相等，这样的面叫等压面。[合成资料 p.2](cite:${cite.equal})`],
-        ...options.contradict ? [`同一高度上的两点压强一定相等。[合成资料 p.2](cite:${cite.check})`] : [],
-        ...compress ? [] : [`判断时要逐条检查静止、连通、同一种液体这几个条件。[合成资料 p.2](cite:${cite.check})`],
-        `![[${cite.formula}]]`,
-      ].join('\n\n')
-    }
-    if (isWriter(call)) return writePoint(call)
-    return textbookReply(call) ?? (() => { throw new Error(`unexpected model call: ${call.purpose}`) })()
-  }
-}
+const THREE = [{ number: '1.2.2', title: '压强的几种表示' }, { number: '1.2.3', title: '静力学基本方程' }, { number: '1.2.4', title: '基本方程的应用' }]
+const meta = { actor: 'teacher' as const, reason: '讲义测试（合成）' }
 
 type States = Record<string, { readonly state: MasteryState; readonly doubtful?: boolean; readonly explanation?: string }>
+type Info = { kind: string; state: string; note: string; sources: { chunkId: string; citation: string; text: string }[]; web: unknown[]; revised?: string }
 
-async function setUp(options: Options = {}) {
-  const cite: Record<string, string> = {}
-  h = createHarness(call => model(cite, options)(call))
-  const { ctx, endpoint } = h
-  const course = await endpoint('core', 'createCourse', { title: '教材 C（合成资料）' })
-  const skeleton = await endpoint('library', 'import', {
-    title: '合成长小节', kind: 'textbook', authority: '1', courseId: course.id, role: 'skeleton',
-    file: join(FIXTURES, 'synthetic-long-section', 'source.md'), parsed: [join(FIXTURES, 'synthetic-long-section', 'middle.json')],
-  })
-  const chunks = ctx.learnLibrary.section(skeleton.id, '1.2')
-  const find = (text: string) => chunks.find(chunk => chunk.text.includes(text))!.id
-  Object.assign(cite, {
-    pressure: find('压强指单位面积上受到的垂直作用力'), isotropic: find('在各个方向上大小相同'), record: find('记录压强数据时要注明'),
-    equal: find('压强相等的面叫等压面'), check: find('即使在同一高度也不能认为压强相等'), gauge: find('以当地大气压为零点量出的压强叫表压强'),
-    formula: chunks.find(chunk => chunk.kind === 'formula' && chunk.text.includes('p_2 = p_1'))!.id,
-  })
-  const graph = await ctx.learnKnowledge.add(course.id, { nodes: [
-    { title: '等压面', kind: 'knowledge' as const, sources: [cite.equal!] },
-    { title: '表压强', kind: 'knowledge' as const, sources: [cite.gauge!] },
-  ] }, meta)
-  const ids = Object.fromEntries(graph.nodes.map(node => [node.title, node.id]))
-  // The learner's states, as the learner unit would give them.
+/** A course whose learner states the test sets, as the learner unit would give them. */
+async function setUp(reply: Reply, options: HandoutOptions = {}) {
+  course = await handoutCourse(reply, options)
+  const { ids } = course
   let states: States = {}
-  const setStates = (next: States) => { states = next }
-  ctx.learnLearner.states = nodeIds => (nodeIds ?? []).flatMap(nodeId => {
+  course.h.ctx.learnLearner.states = nodeIds => (nodeIds ?? []).flatMap(nodeId => {
     const title = Object.keys(ids).find(key => ids[key] === nodeId)
     const state = title ? states[title] : undefined
     return state ? [{ nodeId, state: state.state, doubtful: state.doubtful ?? false, needsReview: false, explanation: state.explanation ?? '', evidence: [], rulesVersion: 'test', computedAt: '2026-10-10T00:00:00.000Z', courses: [] } as never] : []
   })
-  const { stages: [stage] } = await ctx.learnCurriculum.saveRoadmap(course.id, [{ title: '静止流体', objective: '会用静力学基本方程' }], meta)
-  const { lessons } = await ctx.learnCurriculum.saveDesign(stage!.id, { markdown: '# 阶段设计\n\n1.2 静止流体的压强。', lessons: [{ number: '1.2', title: '静止流体的压强' }] }, meta)
-  return { course, cite, ids, setStates, lesson: lessons[0]! as Lesson }
+  return { ...course, setStates: (next: States) => { states = next } }
 }
 
-async function generate(lesson: Lesson, how: 'confirm' | 'again' = 'confirm') {
-  const settled = textbookSettled(h!.ctx, lesson.id)
-  if (how === 'confirm') await h!.endpoint('curriculum', 'confirmDesign', { stageId: lesson.stageId })
-  else await h!.endpoint('textbook', 'generate', { lessonId: lesson.id })
+async function again(target: HandoutCourse) {
+  const settled = textbookSettled(target.h.ctx, target.lessons[0]!.id)
+  await target.h.endpoint('textbook', 'generate', { lessonId: target.lessons[0]!.id })
   return settled
 }
 
-/** The lesson's paragraphs in order, with their text. */
-async function paragraphs(courseId: string, lesson: Lesson) {
-  const textbook = h!.ctx.learnTextbook
-  return Promise.all(textbook.blocks(courseId, lesson.textbookFile!).map(async block => ({ id: block.id, text: (await textbook.block(courseId, block.id))!.text, original: block.original })))
+const capOf = (call: ModelCall) => /字数上限：(.+)/.exec(call.prompt)![1]!
+const masteryOf = (call: ModelCall) => /# 学习者对本节知识点的掌握\n([\s\S]*?)(?:\n\n# |$)/.exec(call.prompt)?.[1]
+const lastSection = (h: HandoutCourse['h'], title: string) => h.calls.filter(call => isSection(call) && sectionOf(call) === title).at(-1)!
+
+/** The paragraphs of the handout in order, with their text. */
+async function paragraphs(target: HandoutCourse) {
+  const textbook = target.h.ctx.learnTextbook
+  return Promise.all(textbook.blocks(target.courseId).map(async block => ({ id: block.id, text: (await textbook.block(target.courseId, block.id))!.text, original: block.original })))
 }
 
-const masteryOf = (call: ModelCall) => /# 学习者对本课知识点的掌握[^\n]*\n([\s\S]*?)(?:\n\n# |$)/.exec(call.prompt)?.[1]
-const equationWriter = () => h!.calls.filter(call => isWriter(call) && titleOf(call) === '静力学基本方程').at(-1)!
+/** The teacher's tools, run in the course's teacher session. */
+async function teacherTools(target: HandoutCourse) {
+  const tools = new Map<string, { execute(args: unknown, exec: unknown): Promise<string> }>()
+  ;(target.h.ctx as unknown as { provide(name: string, value: unknown): void }).provide('tools', { register: (tool: { name: string }) => { tools.set(tool.name, tool as never); return () => tools.delete(tool.name) } })
+  textbookTools.apply(target.h.ctx as never)
+  const exec = { agent: { session: { id: await target.h.ctx.learnTutor.session(target.courseId) } } }
+  return (name: string, args: unknown) => tools.get(name)!.execute(args, exec)
+}
 
-type Info = { kind: string; state: string; note: string; sources: { chunkId: string; citation: string; text: string }[]; web: unknown[]; revised?: string }
-
-it('tells the writer how to write each knowledge point by the learner state, and still checks coverage', async () => {
-  const { course, lesson, setStates } = await setUp()
-  setStates({ 等压面: { state: 'independent', explanation: '两次独立答对' }, 表压强: { state: 'not-yet' } })
-  expect(await generate(lesson)).toBe('ready')
-  const firstRun = equationWriter()
-  expect(masteryOf(firstRun)).toBe([
-    '- 等压面：已独立完成（两次独立答对）。压缩：保留定义、符号和适用条件，不展开推导和例题。',
-    '- 表压强：还没答对。展开：拆开步骤讲，对照常见错误，用资料里的例题一步一步讲。',
-  ].join('\n'))
-  // Compressed out of the text, it is still reported as not explained.
-  expect(h!.ctx.learnTextbook.status(lesson.id).uncovered).toEqual(['等压面', '表压强'])
+it('sets each section\'s length by the learner\'s state on its knowledge points, and shortens one written too long, once', async () => {
+  const long = Array.from({ length: 20 }, () => '表压强从当地大气压量起。').join('')
+  const { h, setStates } = await setUp(call => {
+    if (isReviser(call)) return reviseReply(call, text => `表压强从当地大气压量起，绝对压强从真空量起。${/\[[^\]]*\]\(cite:ck_\w+\)/.exec(text)![0]}`)
+    if (isSection(call) && sectionOf(call) === '1.2.2 压强的几种表示' && capOf(call).startsWith('150')) return `${long}[合成资料 p.1](cite:${materialOf(call)[0]!.id})`
+    return usual(call)
+  }, {
+    lessons: THREE,
+    nodes: [
+      { title: '表压强', source: chunk => chunk.text.includes('以当地大气压为零点量出的压强叫表压强') },
+      { title: '等压面', source: chunk => chunk.text.includes('压强相等的面叫等压面') },
+    ],
+  })
+  setStates({ 表压强: { state: 'independent', explanation: '两次独立答对' }, 等压面: { state: 'not-yet' } })
+  expect(await confirm(course!)).toBe('ready')
+  const gauge = lastSection(h, '1.2.2 压强的几种表示')
+  expect(capOf(gauge)).toBe('150 字（这一节的知识点都已经会了）')
+  expect(masteryOf(gauge)).toBe('- 表压强：已独立完成。一两句带过，保留定义、符号和适用条件。')
+  const equation = lastSection(h, '1.2.3 静力学基本方程')
+  expect(capOf(equation)).toBe('700 字（有还没掌握的知识点）')
+  expect(masteryOf(equation)).toBe('- 等压面：还没答对。多讲一步：拆开步骤，点明常见错误。')
+  expect(capOf(lastSection(h, '1.2.4 基本方程的应用'))).toBe('400 字（正常讲）')
+  // The plan sees the states too, with what they rest on.
+  expect(h.calls.find(call => call.purpose === 'learning-textbook-plan')!.prompt).toContain('- 表压强：已独立完成（两次独立答对）。')
+  // 240 characters against a cap of 150: shortened once, by the reviser.
+  const [reviser, ...more] = h.calls.filter(isReviser)
+  expect(more).toEqual([])
+  expect(reviser!.prompt).toContain('1.2.2 压强的几种表示 的讲解')
+  expect(reviser!.prompt).toContain('超过了 150 字的上限，压缩到上限以内')
+  const text = await handoutText(course!)
+  expect(text).not.toContain(long)
+  expect(text).toContain('表压强从当地大气压量起，绝对压强从真空量起。')
 
   // Answered right, then asked about again and again: written out in full.
-  setStates({ 等压面: { state: 'independent', doubtful: true }, 表压强: { state: 'assisted' } })
-  expect(await generate(lesson, 'again')).toBe('ready')
-  const secondRun = equationWriter()
-  expect(masteryOf(secondRun)).toBe([
-    '- 等压面：已独立完成，反复提问过。展开：拆开步骤讲，对照常见错误，用资料里的例题一步一步讲。',
-    '- 表压强：有帮助才完成。正常讲，并提醒学习者自己独立做一遍。',
-  ].join('\n'))
-  expect(h!.ctx.learnTextbook.status(lesson.id).uncovered).toEqual(['表压强'])
+  setStates({ 表压强: { state: 'independent', doubtful: true } })
+  expect(await again(course!)).toBe('ready')
+  const doubtful = lastSection(h, '1.2.2 压强的几种表示')
+  expect(capOf(doubtful)).toBe('700 字（有还没掌握的知识点）')
+  expect(masteryOf(doubtful)).toBe('- 表压强：已独立完成，反复提问过。多讲一步：拆开步骤，点明常见错误。')
   // The rules and the material are the same: only the detail asked for differs.
-  expect(secondRun.system).toBe(firstRun.system)
-  expect(secondRun.prompt.split('# 资料片段')[1]).toBe(firstRun.prompt.split('# 资料片段')[1])
-
-  // Nothing tested yet: written as normal.
-  setStates({})
-  expect(await generate(lesson, 'again')).toBe('ready')
-  expect(masteryOf(equationWriter())).toContain('- 等压面：没测过。正常讲。')
-  expect(await paragraphs(course.id, lesson)).not.toHaveLength(0)
+  expect(doubtful.system).toBe(gauge.system)
+  expect(doubtful.prompt.split('# 资料片段')[1]).toBe(gauge.prompt.split('# 资料片段')[1])
 })
 
-it('rewrites the paragraphs asked for, leaves the others as they were, and never rewrites source text', async () => {
-  const { course, lesson } = await setUp({
-    revise: targets => [...targets].map(([id, text]) => text.includes('逐条检查')
-      ? `[[段落 ${id}]]\n第一步，看两点之间是否由同一种液体连通。${citationOf(text)}\n\n第二步，再看液体是否静止。${citationOf(text)}`
-      : `[[段落 ${id}]]\n（删除）`).join('\n\n'),
+it('rewrites the paragraphs the teacher asks for, leaves the others as they were, and never source text or a table', async () => {
+  const { h, courseId, lessons } = await setUp(call => {
+    if (isReviser(call)) {
+      return reviseReply(call, text => (text.includes('逐条检查')
+        ? `第一步，看两点之间是否由同一种液体连通。${/\[[^\]]*\]\(cite:ck_\w+\)/.exec(text)![0]}\n\n第二步，再看液体是否静止。${/\[[^\]]*\]\(cite:ck_\w+\)/.exec(text)![0]}`
+        : '（删除）'))
+    }
+    if (!isSection(call)) return usual(call)
+    const cite = materialOf(call).find(chunk => chunk.kind === '正文')!.id
+    return [
+      `判断时要逐条检查静止、连通、同一种液体这几个条件。[合成资料 p.2](cite:${cite})`,
+      `静止流体里任意一点的压强，朝哪个方向量都一样大。[合成资料 p.1](cite:${cite})`,
+      `记录压强要写明是哪一种。[合成资料 p.1](cite:${cite})`,
+      `![[${materialOf(call).find(chunk => chunk.kind === '公式')!.id}]]`,
+    ].join('\n\n')
   })
-  expect(await generate(lesson)).toBe('ready')
-  const before = await paragraphs(course.id, lesson)
+  expect(await confirm(course!)).toBe('ready')
+  const before = await paragraphs(course!)
   const steps = before.find(item => item.text.includes('逐条检查'))!
   const isotropic = before.find(item => item.text.includes('朝哪个方向量都一样大'))!
-  const checksBefore = h!.calls.filter(isCheck).length
 
   // Through the teacher's tool.
-  const tools = new Map<string, { execute(args: unknown, exec: unknown): Promise<string> }>()
-  ;(h!.ctx as unknown as { provide(name: string, value: unknown): void }).provide('tools', { register: (tool: { name: string }) => { tools.set(tool.name, tool as never); return () => tools.delete(tool.name) } })
-  textbookTools.apply(h!.ctx as never)
-  const exec = { agent: { session: { id: await h!.ctx.learnTutor.session(course.id) } } }
+  const run = await teacherTools(course!)
   const instruction = '把检查条件拆成两步'
-  const reply = await tools.get('revise_textbook')!.execute({ lessonId: lesson.id, blocks: [steps.id, isotropic.id], instruction }, exec)
-  expect(reply).toBe('已修改 1.2 的 1 段，多出 1 段，删去 1 段。\n改过的段落核对通过。')
-
-  const after = await paragraphs(course.id, lesson)
+  expect(await run('revise_textbook', { lessonId: lessons[0]!.id, blocks: [steps.id, isotropic.id], instruction })).toBe('已修改 1 段，多出 1 段，删去 1 段。\n改过的段落程序检查没有发现问题。')
+  const after = await paragraphs(course!)
   // The others: same text, same ids, same order.
   const untouched = (list: typeof before) => list.filter(item => item.id !== steps.id && item.id !== isotropic.id && !item.text.startsWith('第二步'))
   expect(untouched(after)).toEqual(untouched(before))
@@ -184,46 +138,67 @@ it('rewrites the paragraphs asked for, leaves the others as they were, and never
   expect(after[at + 1]!.text).toMatch(/^第二步，再看液体是否静止。/)
   expect(before.some(item => item.id === after[at + 1]!.id)).toBe(false)
   expect(after.some(item => item.id === isotropic.id)).toBe(false)
-  // Where they went.
-  const textbook = h!.ctx.learnTextbook
-  expect(textbook.revisions(course.id, isotropic.id)).toMatchObject([{ into: [], reason: instruction }])
-  expect(textbook.revisions(course.id, steps.id)).toMatchObject([{ into: [steps.id, after[at + 1]!.id], reason: instruction }])
-  // Only what changed was checked again; the others keep their check.
-  const rechecked = h!.calls.filter(isCheck).slice(checksBefore).flatMap(call => paragraphsOf(call).map(paragraph => paragraph.text))
-  expect(rechecked).toEqual(['第一步，看两点之间是否由同一种液体连通。', '第二步，再看液体是否静止。'])
-  expect(await h!.endpoint<Info>('textbook', 'blockInfo', { courseId: course.id, blockId: steps.id })).toMatchObject({ kind: 'explanation', state: 'ok', revised: instruction })
-  expect(textbook.status(lesson.id)).toMatchObject({ state: 'ready', unverified: 0, check: { stale: 0 } })
+  const textbook = h.ctx.learnTextbook
+  expect(textbook.revisions(courseId, isotropic.id)).toMatchObject([{ into: [], reason: instruction }])
+  expect(textbook.revisions(courseId, steps.id)).toMatchObject([{ into: [steps.id, after[at + 1]!.id], reason: instruction }])
+  expect(await h.endpoint<Info>('textbook', 'blockInfo', { courseId, blockId: steps.id })).toMatchObject({ kind: 'explanation', state: 'none', revised: instruction })
+  // The new paragraph is in the same lesson's section.
+  expect(textbook.blocks(courseId).find(block => block.id === after[at + 1]!.id)!.lessonId).toBe(lessons[0]!.id)
 
-  // Source text, ids not in the lesson, or too many at once change nothing.
+  // Source text, a table, ids not in the handout, or too many at once change nothing.
   const original = after.find(item => item.original)!
-  await expect(textbook.reviseBlocks(lesson.id, { blockIds: [original.id], instruction }, meta)).rejects.toMatchObject({ code: 'learning/textbook/original' })
-  await expect(textbook.reviseBlocks(lesson.id, { blockIds: ['zzzzzz'], instruction }, meta)).rejects.toMatchObject({ code: 'learning/textbook/no-block' })
-  await expect(textbook.reviseBlocks(lesson.id, { blockIds: Array.from({ length: 9 }, (_, i) => `zzzzz${i}`), instruction }, meta)).rejects.toMatchObject({ code: 'learning/textbook/too-many' })
-  expect(await paragraphs(course.id, lesson)).toEqual(after)
-  expect(await h!.endpoint<Info>('textbook', 'blockInfo', { courseId: course.id, blockId: original.id })).toMatchObject({ kind: 'original', sources: [{ chunkId: expect.stringMatching(/^ck_/) }] })
+  const table = after.find(item => item.text.startsWith('| 名词 |'))!
+  await expect(textbook.reviseBlocks(lessons[0]!.id, { blockIds: [original.id], instruction }, meta)).rejects.toMatchObject({ code: 'learning/textbook/original' })
+  await expect(textbook.reviseBlocks(lessons[0]!.id, { blockIds: [table.id], instruction }, meta)).rejects.toMatchObject({ code: 'learning/textbook/table' })
+  await expect(textbook.reviseBlocks(lessons[0]!.id, { blockIds: ['zzzzzz'], instruction }, meta)).rejects.toMatchObject({ code: 'learning/textbook/no-block' })
+  await expect(textbook.reviseBlocks(lessons[0]!.id, { blockIds: Array.from({ length: 9 }, (_, i) => `zzzzz${i}`), instruction }, meta)).rejects.toMatchObject({ code: 'learning/textbook/too-many' })
+  expect(await paragraphs(course!)).toEqual(after)
+  expect(await h.endpoint<Info>('textbook', 'blockInfo', { courseId, blockId: original.id })).toMatchObject({ kind: 'original', sources: [{ chunkId: expect.stringMatching(/^ck_/) }] })
 })
 
-it('rewrites a contradicted paragraph once before publishing it', async () => {
-  const { course, lesson } = await setUp({ contradict: true, revise: fixes })
-  expect(await generate(lesson)).toBe('ready')
-  expect(h!.calls.filter(isReviser)).toHaveLength(1)
-  const text = (await h!.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text
-  expect(text).not.toContain('一定相等')
-  expect(text).toContain('两点之间隔着另一种液体时，即使在同一高度也不能认为相等。')
-  expect(h!.ctx.learnTextbook.status(lesson.id)).toMatchObject({ state: 'ready', unverified: 0, check: { state: 'checked', notes: [] } })
-})
+it('lets the learner edit a paragraph in place, unchecked, and says a regeneration replaces it', async () => {
+  const { h, courseId, lessons } = await setUp(call => {
+    if (!isSection(call)) return usual(call)
+    const [first, second] = materialOf(call).filter(chunk => chunk.kind === '正文')
+    return `${sectionReply(call, '静止流体里各方向的压强一样大')}\n\n压强的单位是帕斯卡。[《合成长小节》p.1](cite:${first!.id})[《合成长小节》p.1](cite:${second!.id})`
+  })
+  expect(await confirm(course!)).toBe('ready')
+  const unit = await blockOf(course!, '压强的单位是帕斯卡')
 
-it('marks a paragraph still contradicted after the one rewrite in the margin, not in the text, and explains it', async () => {
-  const { course, lesson } = await setUp({ contradict: true, revise: same })
-  expect(await generate(lesson)).toBe('ready')
-  expect(h!.calls.filter(isReviser)).toHaveLength(1)
-  const wrong = (await paragraphs(course.id, lesson)).find(item => item.text.includes('一定相等'))!
-  expect(wrong.text).not.toContain('待核实')
-  expect(h!.ctx.learnTextbook.status(lesson.id)).toMatchObject({ unverified: 1 })
-  expect(await h!.endpoint('textbook', 'flagged', { lessonId: lesson.id })).toEqual([wrong.id])
-
-  const info = await h!.endpoint<Info>('textbook', 'blockInfo', { courseId: course.id, blockId: wrong.id })
-  expect(info).toMatchObject({ kind: 'explanation', state: 'flagged', note: NOTE, sources: expect.arrayContaining([expect.objectContaining({ citation: expect.stringContaining('《合成长小节》'), text: expect.stringContaining('即使在同一高度也不能认为压强相等') })]) })
+  // Its citations as short markers; the same page of two chunks, one marker each.
+  expect(await h.endpoint('textbook', 'blockSource', { courseId, blockId: unit.id })).toEqual({ text: '压强的单位是帕斯卡。〔p.1〕〔p.1〕' })
+  // A new marker is not a source; a number the material lacks is the learner's to write.
+  const edited = await h.endpoint('textbook', 'editBlock', { courseId, blockId: unit.id, text: '我的笔记：1 Pa 等于 1 N/m²，998 只是举例。〔p.1〕〔p.9〕' })
+  expect(edited).toEqual({ blocks: [unit.id] })
+  const now = await blockOf(course!, '我的笔记')
+  expect(now.id).toBe(unit.id)
+  expect(now.text).toBe(`我的笔记：1 Pa 等于 1 N/m²，998 只是举例。[《合成长小节》p.1](cite:${unit.citations[0]})`)
+  expect(now.unverified).toBe(false)
+  const info = await h.endpoint<Info>('textbook', 'blockInfo', { courseId, blockId: unit.id })
+  expect(info).toMatchObject({ kind: 'explanation', state: 'edited', note: '', sources: [{ chunkId: unit.citations[0], citation: expect.stringContaining('《合成长小节》') }] })
+  expect(info).not.toHaveProperty('revised')
   // Words for the learner: internal ids only where a source opens.
   expect([info.note, ...info.sources.flatMap(source => [source.citation, source.text])].join('\n')).not.toMatch(/ck_|kn_/)
+  expect(h.ctx.learnTextbook.status(lessons[0]!.id)).toMatchObject({ state: 'ready', unverified: 0, edited: 1 })
+
+  // Two paragraphs: the second gets a new id in the same section; an empty one is removed.
+  const split = await h.endpoint<{ blocks: string[] }>('textbook', 'editBlock', { courseId, blockId: unit.id, text: '第一行笔记。\n\n第二行笔记。' })
+  expect(split.blocks).toHaveLength(2)
+  expect(split.blocks[0]).toBe(unit.id)
+  expect(h.ctx.learnTextbook.blocks(courseId).find(block => block.id === split.blocks[1])!.lessonId).toBe(lessons[0]!.id)
+  expect(h.ctx.learnTextbook.status(lessons[0]!.id)).toMatchObject({ edited: 2 })
+  expect(await h.endpoint('textbook', 'editBlock', { courseId, blockId: split.blocks[1], text: '  ' })).toEqual({ blocks: [] })
+  expect(await handoutText(course!)).not.toContain('第二行笔记')
+  expect(h.ctx.learnTextbook.revisions(courseId, split.blocks[1]!).at(-1)).toMatchObject({ into: [], reason: '学习者在讲义页修改' })
+
+  // Source text cannot be edited.
+  const original = (await paragraphs(course!)).find(item => item.original)!
+  expect(await h.endpoint('textbook', 'blockSource', { courseId, blockId: original.id })).toEqual({ refused: expect.stringContaining('原书原文') })
+  expect((await h.call('textbook', 'editBlock', { courseId, blockId: original.id, text: '改原文' })).error?.code).toBe('learning/textbook/original')
+
+  // Written again: the learner's paragraph is replaced, and recorded as such.
+  expect(await again(course!)).toBe('ready')
+  expect(await handoutText(course!)).not.toContain('第一行笔记')
+  expect(h.ctx.learnTextbook.status(lessons[0]!.id)).not.toHaveProperty('edited')
+  expect(h.ctx.learnTextbook.revisions(courseId, unit.id).at(-1)).toMatchObject({ into: [], reason: '重新生成讲义' })
 })

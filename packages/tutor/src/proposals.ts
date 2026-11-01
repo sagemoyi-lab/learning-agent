@@ -6,9 +6,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import { COURSE_LAYOUT, LearningApiError, type ChangeTarget, type Proposal } from '@learning-agent/contracts'
 import { must } from '@learning-agent/kit'
 
-const SOURCE: Record<Proposal['source'], string> = { annotation: '教材批注里的报错', 'side-chat': '侧边提问里的修改建议', user: '学习者', review: '阶段复盘', teacher: '主老师' }
+const SOURCE: Record<Proposal['source'], string> = { annotation: '讲义批注里的报错', 'side-chat': '侧边提问里的修改建议', user: '学习者', review: '阶段复盘', teacher: '主老师' }
 
-/** A target in the teacher's words: a textbook file is its lesson, the course files are named. */
+/** A target in the teacher's words: a handout is its stage (with a lesson to pass the tools), the course files are named. */
 function targetName(ctx: Context, courseId: string, target: ChangeTarget): string {
   if (target.kind === 'node') {
     const node = ctx.learnKnowledge.graph(courseId).nodes.find(item => item.id === target.id)
@@ -19,8 +19,9 @@ function targetName(ctx: Context, courseId: string, target: ChangeTarget): strin
   if (target.path === COURSE_LAYOUT.roadmap) return '课程路线（roadmap.md）'
   for (const stage of ctx.learnCurriculum.stages(courseId)) {
     if (target.path === `${stage.folder}/design.md`) return `阶段 ${stage.index} ${stage.title} 的设计书（${stage.id}）`
-    const lesson = ctx.learnCurriculum.lessons(stage.id).find(item => item.textbookFile === target.path)
-    if (lesson) return `教材 ${lesson.number} ${lesson.title}（${lesson.id}）`
+    const lessons = ctx.learnCurriculum.lessons(stage.id).filter(item => item.textbookFile === target.path)
+    if (lessons.length > 1) return `阶段 ${stage.index} ${stage.title} 的讲义（课时 ${lessons[0]!.id}）`
+    if (lessons[0]) return `讲义 ${lessons[0].number} ${lessons[0].title}（${lessons[0].id}）`
   }
   return target.path
 }
@@ -34,8 +35,8 @@ export function proposalLines(ctx: Context, courseId: string): string[] {
     ...open.map(proposal => `- ${proposal.id}（${SOURCE[proposal.source]}，${proposal.targets.map(target => targetName(ctx, courseId, target)).join('、')}）：${proposal.summary}\n  ${proposal.rationale.replace(/\n/g, '\n  ')}`),
     [
       '处理：先对照资料（search_library、read_section）核对，拿不准就问学习者。',
-      sources.has('annotation') ? '教材报错：先读那一段（read_lesson_textbook），确实有错就用 revise_textbook 改那几段。' : '',
-      sources.has('side-chat') ? '侧边提问里的修改建议：先问清学习者的想法再决定；教材的讲法用 revise_textbook 改，课程路线、阶段设计、目标说明和知识点用对应的工具改，要学习者确认的修改等学习者确认以后再记录。' : '',
+      sources.has('annotation') ? '讲义报错：先读那一段（read_lesson_textbook），确实有错就用 revise_textbook 改那几段。' : '',
+      sources.has('side-chat') ? '侧边提问里的修改建议：先问清学习者的想法再决定；讲义的讲法用 revise_textbook 改，课程路线、阶段设计、目标说明和知识点用对应的工具改，要学习者确认的修改等学习者确认以后再记录。' : '',
       '改好以后 decide_proposal 记为 applied，并用一句话告诉学习者改了什么；核对后不改，decide_proposal 记为 rejected，note 写清理由（学习者会看到）。学习者正在做测试或阅读时不打断，等这一轮该你说话时再处理。',
     ].filter(Boolean).join(''),
   ]
@@ -59,7 +60,7 @@ export function decideProposal(ctx: Context, courseId: string, proposalId: strin
     .flatMap(target => core.changes.list({ target }))
     .filter(change => change.at >= proposal.createdAt && !change.revertOf)
   if (changes.length === 0) {
-    throw new LearningApiError('learning/tutor/not-changed', '提案涉及的内容在提案之后还没有改动：先用对应的工具改好（教材用 revise_textbook），再记为 applied', { proposalId })
+    throw new LearningApiError('learning/tutor/not-changed', '提案涉及的内容在提案之后还没有改动：先用对应的工具改好（讲义用 revise_textbook），再记为 applied', { proposalId })
   }
   return core.proposals.decide(proposalId, 'applied', changes.map(change => change.id), text)
 }

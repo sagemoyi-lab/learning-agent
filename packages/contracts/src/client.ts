@@ -42,7 +42,7 @@ export interface ActivityItem {
   readonly page: string
   /**
    * `learning.panel` key: the button shows this panel in the sidebar instead of opening `page`, and folds the
-   * sidebar when the panel is already showing. Any unit's panel may be named (教材 shows curriculum's outline).
+   * sidebar when the panel is already showing. Any unit's panel may be named (讲义 shows curriculum's outline).
    */
   readonly panel?: string
   /** Lowest order in a scope is that scope's start page. */

@@ -42,6 +42,12 @@ describe('source text copied in', () => {
     expect(expandEmbed(solution.id, undefined, { order, extra: [] })).toMatchObject({ boxes: [expect.stringMatching(/^> \[!quote\]- 原书解答/)] })
   })
 
+  it('leaves a worked example and its solution out of a handout, which cites them', () => {
+    expect(expandEmbed(example.id, step.id, { order, extra: [], examples: false })).toEqual({ error: `${example.id} 是例题，讲义里写成出处标签，不整题放进来` })
+    expect(expandEmbed(solution.id, undefined, { order, extra: [], examples: false })).toMatchObject({ error: expect.stringMatching(/是例题/) })
+    expect(expandEmbed(formula.id, undefined, { order, extra: [], examples: false })).toMatchObject({ boxes: [expect.stringMatching(/^> \[!quote\] 原文/)] })
+  })
+
   it('reads a range whose last id is cut to the end that differs, as a writer may write it', () => {
     const line = `![[${example.id}..${step.id.slice(-3)}]]`
     const [, from, last] = EMBED_LINE.exec(line)!

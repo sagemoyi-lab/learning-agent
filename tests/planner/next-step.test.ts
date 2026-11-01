@@ -20,7 +20,7 @@ function reply(call: { purpose: string }): string {
 }
 
 const next = (courseId: string): Promise<NextStep> => h!.ctx.learnPlanner.next(courseId)
-const readTask = (courseId: string, lessonId: string): Task => h!.ctx.learnCurriculum.publishTask({ courseId: courseId as never, lessonId: lessonId as never, kind: 'read', title: '读 1.1', instructions: '读教材 1.1（合成）', createdBy: 'teacher' })
+const readTask = (courseId: string, lessonId: string): Task => h!.ctx.learnCurriculum.publishTask({ courseId: courseId as never, lessonId: lessonId as never, kind: 'read', title: '读 1.1', instructions: '读讲义 1.1（合成）', createdBy: 'teacher' })
 
 it('names the action and its object: a quiz withdrawn and set again is a new step under the same title', async () => {
   h = createHarness(reply)
@@ -78,11 +78,11 @@ it('brings back tests left open, a timed one first, and hands back once when the
   expect(h.delivered.length).toBe(before + 1)
 })
 
-it('says nobody acts while the textbook is written, the course is archived, or the goal cannot be read', async () => {
+it('says nobody acts while the handout is written, the course is archived, or the goal cannot be read', async () => {
   h = createHarness(reply)
   const { courseId, lesson } = await lessonCourse(h, 'planner A 等待（合成资料）')
   const status = vi.spyOn(h.ctx.learnTextbook, 'status').mockReturnValue({ state: 'running', message: '正在写 1.1（合成）' } as never)
-  expect(await next(courseId)).toMatchObject({ actor: 'none', key: `textbook.wait:${lesson.id}`, title: '等教材 1.1 生成' })
+  expect(await next(courseId)).toMatchObject({ actor: 'none', key: `textbook.wait:${lesson.id}`, title: '等讲义生成' })
   // A handoff now does not wake the teacher.
   await h.settle()
   const before = h.delivered.length

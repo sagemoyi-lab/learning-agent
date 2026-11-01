@@ -179,7 +179,7 @@ class LearnCurriculumService extends Service implements LearnCurriculum {
     const { data, body } = parseFrontmatter(file.text)
     await this.core.files.write(stage.courseId, path, withFrontmatter({ ...data, status: 'confirmed' }, body), { actor: 'user', reason: '学习者确认阶段设计', size: 'major' })
     const confirmed = this.updateStage({ ...stage, designConfirmedAt: now() }, stage.status)
-    this.ctx.emit('learning/handoff', { courseId: stage.courseId, unit: 'curriculum', text: `学习者确认了阶段 ${stage.index}「${stage.title}」的设计书，教材开始生成。` })
+    this.ctx.emit('learning/handoff', { courseId: stage.courseId, unit: 'curriculum', text: `学习者确认了阶段 ${stage.index}「${stage.title}」的设计书，讲义开始生成。` })
     return confirmed
   }
 
@@ -199,6 +199,11 @@ class LearnCurriculumService extends Service implements LearnCurriculum {
   setLessonStatus(lessonId: string, status: Lesson['status']): Lesson {
     const lesson = must(this.store.lesson(lessonId), 'curriculum', '课时', lessonId)
     return this.store.saveLesson({ ...lesson, status })
+  }
+
+  setTextbookFile(stageId: string, file: string): Lesson[] {
+    for (const lesson of this.store.lessons(stageId)) if (lesson.textbookFile !== file) this.store.saveLesson({ ...lesson, textbookFile: file })
+    return this.store.lessons(stageId)
   }
 
   publishTask(input: Omit<Task, 'id' | 'status' | 'createdAt' | 'doneAt'>): Task {
@@ -321,12 +326,10 @@ export function apply(ctx: Context): void {
     if (stage && (stage.status === 'learning' || stage.status === 'ready')) curriculum.setStatus(stage.id, 'testing')
   })
 
-  // The stage's first lesson has its textbook: the stage can start while later lessons are written.
-  ctx.on('learning/textbook-ready', ({ stageId, lessonId }) => {
+  // The stage's handout is written: the stage can start.
+  ctx.on('learning/textbook-ready', ({ stageId }) => {
     const stage = curriculum.stage(stageId)
-    if (stage?.status === 'designing' && stage.designConfirmedAt && curriculum.lessons(stageId)[0]?.id === lessonId) {
-      curriculum.setStatus(stage.id, 'ready')
-    }
+    if (stage?.status === 'designing' && stage.designConfirmedAt) curriculum.setStatus(stage.id, 'ready')
   })
 
   ctx.effect(() => endpoint({
@@ -422,7 +425,7 @@ export function apply(ctx: Context): void {
     const revision = curriculum.revision(request.courseId)
     const roadmap = stages.length
       ? [
-          ...stages.map(stage => `- 阶段 ${stage.index}（${stage.id}）${stage.kind === 'remedial' ? '[补课] ' : ''}${stage.title}：${STAGE_STATUS_LABEL[stage.status]}${stage.status === 'designing' ? (stage.designConfirmedAt ? '，设计已确认，教材生成中' : '，设计待学习者确认') : ''}${reviewWords(stage)}${stage.supports.length ? `；支撑目标 ${stage.supports.join('、')}` : ''}`),
+          ...stages.map(stage => `- 阶段 ${stage.index}（${stage.id}）${stage.kind === 'remedial' ? '[补课] ' : ''}${stage.title}：${STAGE_STATUS_LABEL[stage.status]}${stage.status === 'designing' ? (stage.designConfirmedAt ? '，设计已确认，讲义生成中' : '，设计待学习者确认') : ''}${reviewWords(stage)}${stage.supports.length ? `；支撑目标 ${stage.supports.join('、')}` : ''}`),
           ...(stages.some(stage => stage.designConfirmedAt) ? ['路线已经开始：save_roadmap 只写计划中的普通阶段（前面已开始或排定的保持不变），写明 reason，学习者在课程进度页确认后才生效。'] : []),
           ...(revision ? [`有一份路线调整等学习者确认（${revision.reason}）。`] : []),
         ].join('\n')

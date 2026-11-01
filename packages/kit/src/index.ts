@@ -4,7 +4,7 @@ import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-credentials'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type TokenUsage } from '@deepseek-ai/dsh-llm'
 import { defineTool, type InferArgs, type ParameterSchemaSpec, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { LearningApiError, type SessionLink } from '@learning-agent/contracts'
 import { collectText } from './collect-text.ts'
@@ -204,6 +204,8 @@ export async function complete(ctx: Context, options: {
   readonly model?: string | ModelRoute
   readonly maxTokens?: number
   readonly signal?: AbortSignal
+  /** Each attempt's tokens, when the model reports them. */
+  readonly onUsage?: (usage: TokenUsage) => void
 }): Promise<string> {
   const route = routeOf(options.model) ?? await defaultModel(ctx)
   const info = await ctx.llm.resolveModelInfo?.(route.provider, route.model).catch(() => undefined)
@@ -224,7 +226,13 @@ export async function complete(ctx: Context, options: {
   }
 }
 
+/** One attempt; its tokens and time go to the log, by purpose, for measuring (learning-perf). */
 function once(ctx: Context, route: ModelRoute, pictures: Awaited<ReturnType<typeof imageBlocks>>, options: Parameters<typeof complete>[1] & { readonly maxTokens: number }): Promise<string> {
+  const started = Date.now()
+  const log = (usage: TokenUsage) => {
+    ctx.logger('learning-model').info('%s %s: %d in, %d out (%d thinking), %ds', options.purpose, route.model, usage.inputTokens, usage.outputTokens, usage.reasoningTokens ?? 0, Math.round((Date.now() - started) / 1000))
+    options.onUsage?.(usage)
+  }
   return collectText(ctx.llm.stream({
     provider: route.provider,
     model: route.model,
@@ -234,7 +242,7 @@ function once(ctx: Context, route: ModelRoute, pictures: Awaited<ReturnType<type
     maxTokens: options.maxTokens,
     purpose: options.purpose,
     signal: options.signal ?? new AbortController().signal,
-  } as never))
+  } as never), log)
 }
 
 /** Truncated or empty replies are the model's answer; anything else may be the route itself. */

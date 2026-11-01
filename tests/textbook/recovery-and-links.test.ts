@@ -1,40 +1,42 @@
-// textbook (docs/textbook/design.md): a lesson's run is kept in the
-// database, so a restart resumes it and reuses the plan and the points already written, and the failure count
-// survives; a file changed while the lesson was written is not overwritten; unchanged paragraphs keep their
-// ids; paragraphs link only to the lesson's knowledge points, and the points its material sources but no
-// paragraph explains are reported. Synthetic material, fake model; a restart is a second harness on the same data.
+// textbook (docs/textbook/design.md): a stage's generation is kept in the database, so a restart resumes it and
+// reuses the replies already written, and the failure count survives; a file changed while the handout was written
+// is not overwritten; unchanged paragraphs keep their ids, replaced ones are recorded; paragraphs link only to the
+// stage's knowledge points, and the points its material sources but no paragraph explains are reported; an
+// unusable plan still gives the sections. Synthetic material, fake model; a restart is a second harness on the
+// same data.
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import type { CitedChunk, Lesson, Stage } from '@learning-agent/contracts'
-import { FIXTURES, createHarness, textbookSettled, type Harness, type ModelCall } from '../harness.ts'
-import { isPlan, isWriter, outline, planBySubsection, textbookReply, titleOf, writePoint } from './fakes.ts'
-
-const FIXTURE = join(FIXTURES, 'synthetic-long-section')
-const meta = { actor: 'teacher' as const, reason: '教材 A 测试（合成）' }
+import { createHarness, textbookSettled, type Harness } from '../harness.ts'
+import {
+  blockOf, confirm, handoutCourse, handoutText, isOverview, isPlan, isSection, materialOf, planReply, sectionOf, sectionReply, usual,
+  type HandoutCourse, type HandoutOptions, type Reply,
+} from './fakes.ts'
 
 const open: Harness[] = []
 afterEach(() => { for (const h of open.splice(0)) h.dispose() })
 
-type Reply = (call: ModelCall) => string | { finish: 'max-tokens' }
-const plain: Reply = call => textbookReply(call) ?? (() => { throw new Error(`unexpected model call: ${call.purpose}`) })()
+const THREE = [{ number: '1.2.2', title: '压强的几种表示' }, { number: '1.2.3', title: '静力学基本方程' }, { number: '1.2.4', title: '基本方程的应用' }]
 
-function harness(reply: Reply, root?: string): Harness {
-  const h = createHarness(reply, {}, root ? { root } : {})
-  open.push(h)
-  return h
+async function setUp(reply: Reply, options?: HandoutOptions): Promise<HandoutCourse> {
+  const course = await handoutCourse(reply, options)
+  open.push(course.h)
+  return course
 }
 
-/** Stop `h` (its data stays) and start again on the same data. */
-async function restart(h: Harness, reply: Reply): Promise<Harness> {
+/** Stop the course's harness (its data stays) and start again on the same data. */
+async function restart(course: HandoutCourse, reply: Reply): Promise<HandoutCourse> {
+  const { h } = course
   await h.settle()
   open.splice(open.indexOf(h), 1)
   h.dispose(true)
-  return harness(reply, h.root)
+  const after = createHarness(reply, { textbook: { webCheck: false } }, { root: h.root })
+  open.push(after)
+  return { ...course, h: after }
 }
 
-function setState(h: Harness, lessonId: string, state: string): void {
-  h.ctx.learnCore.db.sqlite.prepare("UPDATE textbook_runs SET data = json_set(data, '$.state', ?) WHERE lesson_id = ?").run(state, lessonId)
+function setState(course: HandoutCourse, state: string): void {
+  course.h.ctx.learnCore.db.sqlite.prepare("UPDATE textbook_handouts SET data = json_set(data, '$.state', ?) WHERE stage_id = ?").run(state, course.stage.id)
 }
 
 function handoffs(h: Harness): string[] {
@@ -43,183 +45,151 @@ function handoffs(h: Harness): string[] {
   return texts
 }
 
-/** A course with the long synthetic section as its skeleton, up to a confirmed-ready stage design. */
-async function setUp(h: Harness, nodes: { readonly title: string; readonly source?: (chunk: CitedChunk) => boolean; readonly core?: boolean }[] = []) {
-  const { ctx, endpoint } = h
-  const course = await endpoint('core', 'createCourse', { title: '教材 A（合成资料）' })
-  const source = await endpoint('library', 'import', {
-    title: '合成长小节', kind: 'textbook', authority: '1',
-    file: join(FIXTURE, 'source.md'), parsed: [join(FIXTURE, 'middle.json')], courseId: course.id, role: 'skeleton',
-  })
-  // The steps before the stage (goal, diagnostic), so the planner reaches the lesson.
-  await ctx.learnGoal.saveDraft(course.id, {
-    purpose: '验证教材生成', scenario: '合成资料', canDo: ['用静力学基本方程算压强'], level: '能独立完成', verification: '小测',
-    boundaries: { exclude: [], defaultConditions: { book: 'closed', calculator: true, formulaSheet: false } },
-  }, '# 目标说明\n', meta)
-  await ctx.learnGoal.confirm(course.id)
-  const chunks = ctx.learnLibrary.section(source.id, '1.2')
-  const graph = await ctx.learnKnowledge.add(course.id, { nodes: [{ title: '诊断', kind: 'skill' as const }, ...nodes.map(node => ({ title: node.title, kind: 'knowledge' as const, ...(node.source ? { sources: [chunks.find(node.source)!.id] } : {}) }))] }, meta)
-  const ids = Object.fromEntries(graph.nodes.map(node => [node.title, node.id]))
-  const probe = ctx.learnLibrary.section(source.id, '习题').find(chunk => chunk.kind === 'exercise')!
-  const [problem] = ctx.learnAssess.addProblems([{
-    stem: probe.text, answer: { kind: 'numeric', value: 30, unit: 'kPa', tolerance: { absolute: 0.1 } }, answerSource: 'book', tier: 1,
-    origin: { kind: 'chunk', chunkId: probe.id, label: probe.citation }, nodeIds: [ids['诊断']!], pool: 'practice',
-  }])
-  const diagnostic = ctx.learnAssess.startTest({ courseId: course.id, kind: 'diagnostic', problemIds: [problem!.id] })
-  await ctx.learnAssess.submit(diagnostic.id, [{ problemId: problem!.id, text: '30 kPa' }])
-  const { stages: [stage] } = await ctx.learnCurriculum.saveRoadmap(course.id, [{ title: '静止流体', objective: '会用静力学基本方程' }], meta)
-  const { lessons } = await ctx.learnCurriculum.saveDesign(stage!.id, {
-    markdown: '# 阶段设计\n\n## 课时\n\n1.2 静止流体的压强。', lessons: [{ number: '1.2', title: '静止流体的压强' }],
-    nodeIds: nodes.filter(node => node.core).map(node => ids[node.title]!),
-  }, meta)
-  await h.settle()
-  return { course, source, chunks, ids, stage: stage as Stage, lesson: lessons[0]! as Lesson }
-}
-
-async function generate(h: Harness, lesson: Lesson, how: 'confirm' | 'again' = 'again') {
-  const settled = textbookSettled(h.ctx, lesson.id)
-  if (how === 'confirm') await h.endpoint('curriculum', 'confirmDesign', { stageId: lesson.stageId })
-  else await h.endpoint('textbook', 'generate', { lessonId: lesson.id })
+/** Write the handout again, as the teacher's regenerate_textbook and the reader's button do. */
+async function again(course: HandoutCourse) {
+  const settled = textbookSettled(course.h.ctx, course.lessons[0]!.id)
+  await course.h.endpoint('textbook', 'generate', { lessonId: course.lessons[0]!.id })
   return settled
 }
 
-it('resumes a lesson cut off by a restart, reusing the plan and the points already written', async () => {
-  const h = harness(call => {
-    if (isWriter(call) && titleOf(call) === '静力学基本方程') throw new Error('模型服务暂时不可用')
-    return plain(call)
-  })
-  const { lesson } = await setUp(h)
-  expect(await generate(h, lesson, 'confirm')).toBe('failed')
-  expect(h.ctx.learnTextbook.status(lesson.id)).toMatchObject({ state: 'failed', failures: 1, message: expect.stringContaining('模型服务暂时不可用') })
-  const before = h.calls.filter(isWriter).map(titleOf)
-  expect(before).toContain('压强的含义')
+it('resumes a handout cut off by a restart, reusing the replies already written', async () => {
+  const course = await setUp(call => {
+    if (isSection(call) && sectionOf(call) === '1.2.4 基本方程的应用') throw new Error('模型服务暂时不可用')
+    return usual(call)
+  }, { lessons: THREE })
+  const [lesson] = course.lessons
+  expect(await confirm(course)).toBe('failed')
+  expect(course.h.ctx.learnTextbook.status(lesson!.id)).toMatchObject({ state: 'failed', failures: 1, message: expect.stringContaining('模型服务暂时不可用') })
+  const before = course.h.calls.filter(isSection).map(sectionOf)
+  expect(before).toContain('1.2.2 压强的几种表示')
   // The retry was under way when the program stopped.
-  setState(h, lesson.id, 'running')
+  setState(course, 'running')
 
-  const after = await restart(h, plain)
-  expect(after.ctx.learnTextbook.status(lesson.id)).toMatchObject({ state: 'running' })
-  expect(await textbookSettled(after.ctx, lesson.id)).toBe('ready')
-  // The plan and the points written before the restart are not asked for again.
-  expect(after.calls.filter(isPlan)).toEqual([])
-  const again = after.calls.filter(isWriter).map(titleOf)
-  expect(again).toContain('静力学基本方程')
-  expect(again.filter(title => before.includes(title) && title !== '静力学基本方程')).toEqual([])
-  expect(after.ctx.learnTextbook.status(lesson.id)).toMatchObject({ state: 'ready', unverified: 0 })
+  const after = await restart(course, usual)
+  expect(after.h.ctx.learnTextbook.status(lesson!.id)).toMatchObject({ state: 'running' })
+  expect(await textbookSettled(after.h.ctx, lesson!.id)).toBe('ready')
+  // The plan, the overview and the sections written before the restart are not asked for again.
+  expect(after.h.calls.filter(call => isPlan(call) || isOverview(call))).toEqual([])
+  const written = after.h.calls.filter(isSection).map(sectionOf)
+  expect(written).toContain('1.2.4 基本方程的应用')
+  expect(written.filter(title => before.includes(title) && title !== '1.2.4 基本方程的应用')).toEqual([])
+  expect(after.h.ctx.learnTextbook.status(lesson!.id)).toMatchObject({ state: 'ready', unverified: 0 })
+  expect(await handoutText(after)).toContain('### 1.2.4 基本方程的应用')
 })
 
 it('keeps the failure count across a restart, so the second failure goes to the learner', async () => {
   const cut: Reply = () => ({ finish: 'max-tokens' })
-  const h = harness(cut)
-  const { course, lesson } = await setUp(h)
-  expect(await generate(h, lesson, 'confirm')).toBe('failed')
-  const after = await restart(h, cut)
-  expect(after.ctx.learnTextbook.status(lesson.id)).toMatchObject({ state: 'failed', failures: 1 })
-  expect(await after.ctx.learnPlanner.next(course.id)).toMatchObject({ actor: 'teacher', title: '教材 1.2 生成失败' })
-  expect(await generate(after, lesson)).toBe('failed')
-  expect(after.ctx.learnTextbook.status(lesson.id)).toMatchObject({ state: 'failed', failures: 2 })
-  expect(await after.ctx.learnPlanner.next(course.id)).toMatchObject({ actor: 'learner', title: '教材 1.2 生成失败' })
+  const course = await setUp(cut)
+  const [lesson] = course.lessons
+  expect(await confirm(course)).toBe('failed')
+  const after = await restart(course, cut)
+  expect(after.h.ctx.learnTextbook.status(lesson!.id)).toMatchObject({ state: 'failed', failures: 1 })
+  expect(await after.h.ctx.learnPlanner.next(after.courseId)).toMatchObject({ actor: 'teacher', title: '讲义生成失败' })
+  expect(await again(after)).toBe('failed')
+  expect(after.h.ctx.learnTextbook.status(lesson!.id)).toMatchObject({ state: 'failed', failures: 2 })
+  expect(await after.h.ctx.learnPlanner.next(after.courseId)).toMatchObject({ actor: 'learner', title: '讲义生成失败' })
 })
 
-it('finishes a lesson published just before a restart without writing it again or handing it over twice', async () => {
-  const h = harness(plain)
-  const { lesson } = await setUp(h)
-  expect(await generate(h, lesson, 'confirm')).toBe('ready')
+it('finishes a handout published just before a restart without writing it again or handing it over twice', async () => {
+  const course = await setUp(usual)
+  expect(await confirm(course)).toBe('ready')
   // The file is written, the run not yet marked done.
-  setState(h, lesson.id, 'running')
+  setState(course, 'running')
 
-  const after = await restart(h, () => { throw new Error('no model call expected') })
-  const said = handoffs(after)
-  expect(await textbookSettled(after.ctx, lesson.id)).toBe('ready')
-  await after.settle()
-  expect(after.calls).toEqual([])
+  const after = await restart(course, () => { throw new Error('no model call expected') })
+  const said = handoffs(after.h)
+  expect(await textbookSettled(after.h.ctx, after.lessons[0]!.id)).toBe('ready')
+  await after.h.settle()
+  expect(after.h.calls).toEqual([])
   expect(said).toHaveLength(1)
-  expect(said[0]).toMatch(/^教材 1\.2 静止流体的压强 已生成/)
+  expect(said[0]).toMatch(/^讲义 静止流体 已生成/)
 })
 
-it('does not overwrite a textbook edited while the lesson was being written', async () => {
+it('does not overwrite a handout edited while it was being written', async () => {
   let edit: (() => void) | undefined
-  const h = harness(call => {
+  const course = await setUp(call => {
     edit?.()
     edit = undefined
-    return plain(call)
+    return usual(call)
   })
-  const { course, lesson } = await setUp(h)
-  expect(await generate(h, lesson, 'confirm')).toBe('ready')
-  const path = join(h.ctx.learnCore.courses.folder(course.id), lesson.textbookFile!)
-  edit = () => writeFileSync(path, '我在应用外改过这一节。\n', 'utf8')
-  expect(await generate(h, lesson)).toBe('failed')
-  expect(h.ctx.learnTextbook.status(lesson.id).message).toMatch(/被修改过.*没有覆盖/)
-  expect((await h.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text).toBe('我在应用外改过这一节。\n')
+  const { h, courseId } = course
+  expect(await confirm(course)).toBe('ready')
+  const file = h.ctx.learnCurriculum.lesson(course.lessons[0]!.id)!.textbookFile!
+  const path = join(h.ctx.learnCore.courses.folder(courseId), file)
+  edit = () => writeFileSync(path, '我在应用外改过讲义。\n', 'utf8')
+  expect(await again(course)).toBe('failed')
+  expect(h.ctx.learnTextbook.status(course.lessons[0]!.id).message).toMatch(/被修改过.*没有覆盖/)
+  expect((await h.ctx.learnCore.files.read(courseId, file))!.text).toBe('我在应用外改过讲义。\n')
 })
 
-it('keeps the ids of the paragraphs that read the same when a lesson is written again', async () => {
-  let words = '这一点用自己的话讲'
-  const h = harness(call => (isWriter(call) && titleOf(call) === '静力学基本方程' ? writePoint(call, words) : plain(call)))
-  const { course, lesson } = await setUp(h)
-  expect(await generate(h, lesson, 'confirm')).toBe('ready')
-  const ids = () => h.ctx.learnTextbook.blocks(course.id, lesson.textbookFile).map(block => block.id)
+it('keeps the ids of the paragraphs that read the same when written again, and records the ones replaced', async () => {
+  let words = '这一节用自己的话讲'
+  const course = await setUp(call => (isSection(call) && sectionOf(call) === '1.2.3 静力学基本方程' ? sectionReply(call, words) : usual(call)), { lessons: THREE })
+  const { h, courseId } = course
+  expect(await confirm(course)).toBe('ready')
+  const ids = () => h.ctx.learnTextbook.blocks(courseId).map(block => block.id)
   const first = ids()
-  expect(await generate(h, lesson)).toBe('ready')
+  expect(await again(course)).toBe('ready')
   expect(ids()).toEqual(first)
-  words = '这一点换了说法'
-  expect(await generate(h, lesson)).toBe('ready')
-  // Only the reworded paragraph is new; the copied source text and the other points keep theirs.
-  expect(ids().filter((id, index) => id !== first[index])).toHaveLength(1)
+  const reworded = h.ctx.learnTextbook.blocks(courseId).find(block => block.lessonId === course.lessons[1]!.id && !block.original)!
+  words = '这一节换了说法'
+  expect(await again(course)).toBe('ready')
+  // Only the reworded paragraph is new; the tables, the source text and the other sections keep theirs. The old
+  // one is recorded as replaced, so its notes can still find its text.
+  const now = ids()
+  expect(now.filter(id => !first.includes(id))).toHaveLength(1)
+  expect(first.filter(id => !now.includes(id))).toEqual([reworded.id])
+  expect(h.ctx.learnTextbook.revisions(courseId, reworded.id)).toEqual([expect.objectContaining({ blockId: reworded.id, into: [], reason: '重新生成讲义' })])
 })
 
-it('links paragraphs only to the lesson\'s knowledge points and reports what is not explained', async () => {
-  let cite: Record<string, string> = {}
-  const h = harness(call => {
-    // 本节概念 explains 等压面 from its own chunk.
-    if (isPlan(call)) return planBySubsection(call, [], [{ name: '等压面', chunk: outline(call).find(line => line.text.startsWith('在同一种静止、连通、密度不变的液体中，同一水平面'))!.n }])
-    if (!isWriter(call) || titleOf(call) !== '静力学基本方程') return plain(call)
-    const formula = /\[(ck_[0-9A-Z]{26})\] [^\n]* · 公式 ·/.exec(call.prompt)![1]
+it('links paragraphs only to the stage\'s knowledge points and reports what is not explained', async () => {
+  const equal = (text: string) => text.startsWith('在同一种静止、连通、密度不变的液体中，同一水平面')
+  const course = await setUp(call => {
+    if (isPlan(call)) return planReply(call, { terms: [{ name: '等压面', chunk: 0 }] })
+    if (!isSection(call)) return usual(call)
+    const material = materialOf(call)
     return [
-      '### 静力学基本方程',
-      `同一水平面上压强相等，这是列方程的出发点。[合成资料 p.2](cite:${cite.equal})`,
-      `![[${formula}]]`,
-      `这个式子叫静力学基本方程，读数时也要用到它。[合成资料 p.2](cite:${cite.equation})`,
+      `同一水平面上压强相等，这是列方程的出发点。[合成资料 p.2](cite:${material.find(chunk => equal(chunk.text))!.id})`,
+      `![[${material.find(chunk => chunk.kind === '公式' )!.id}]]`,
+      `这个式子叫静力学基本方程，读数时也要用到它。[合成资料 p.2](cite:${material.find(chunk => chunk.text.includes('称为静力学基本方程'))!.id})`,
     ].join('\n\n')
+  }, {
+    nodes: [
+      { title: '等压面', source: chunk => equal(chunk.text) },
+      { title: '真空度', source: chunk => chunk.text.startsWith('当绝对压强低于当地大气压时') },
+      { title: '静力学基本方程', core: true },
+      { title: '读数' },
+    ],
   })
+  const { h, courseId, ids, chunks } = course
   const said = handoffs(h)
-  const { course, chunks, ids, lesson } = await setUp(h, [
-    { title: '等压面', source: chunk => chunk.text.startsWith('在同一种静止、连通、密度不变的液体中，同一水平面') },
-    { title: '真空度', source: chunk => chunk.text.startsWith('当绝对压强低于当地大气压时') },
-    { title: '静力学基本方程', core: true },
-    { title: '读数' },
-  ])
-  cite = {
-    equal: chunks.find(chunk => chunk.text.startsWith('在同一种静止、连通、密度不变的液体中，同一水平面'))!.id,
-    equation: chunks.find(chunk => chunk.text.includes('称为静力学基本方程'))!.id,
-  }
-  expect(await generate(h, lesson, 'confirm')).toBe('ready')
-  const blocks = h.ctx.learnTextbook.blocks(course.id, lesson.textbookFile)
-  const text = (await h.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text
-  const of = (start: string) => blocks.find(block => (text.split(`^${block.id}`)[0]!.split('\n\n').at(-1) ?? '').startsWith(start))!
+  expect(await confirm(course)).toBe('ready')
 
-  // By citation: the paragraph cites the chunk 等压面 is sourced in. By name: the stage's core node.
-  expect(of('同一水平面上压强相等').nodeIds).toEqual([ids['等压面']])
-  expect(of('**等压面**：').nodeIds).toEqual([ids['等压面']])
-  expect(of('这个式子叫静力学基本方程').nodeIds).toEqual([ids['静力学基本方程']])
-  // 读数 is named but is neither a core node of the stage nor sourced in the lesson's material.
+  // By citation: the paragraph cites the chunk 等压面 is sourced in, and so does its row of the terms table. By
+  // name: the stage's core node.
+  expect((await blockOf(course, '同一水平面上压强相等')).nodeIds).toEqual([ids['等压面']])
+  expect((await blockOf(course, '| 名词 |')).nodeIds).toEqual([ids['等压面']])
+  expect((await blockOf(course, '这个式子叫静力学基本方程')).nodeIds).toEqual([ids['静力学基本方程']])
+  // 读数 is named but is neither a core node of the stage nor sourced in its material.
   expect(h.ctx.learnKnowledge.links(ids['读数']!)).toEqual([])
   // The formula copied in cites its own chunk and is source text.
-  const formula = chunks.find(chunk => chunk.kind === 'formula' && chunk.text.includes('p_2 = p_1'))!
-  expect(blocks.find(block => block.citations.includes(formula.id) && block.original)).toBeDefined()
+  const formula = chunks.find(chunk => chunk.kind === 'formula')!
+  expect(h.ctx.learnTextbook.blocks(courseId).find(block => block.citations.includes(formula.id) && block.original)).toBeDefined()
 
-  expect(h.ctx.learnTextbook.status(lesson.id)).toMatchObject({ state: 'ready', unverified: 0, uncovered: ['真空度'] })
+  expect(h.ctx.learnTextbook.status(course.lessons[0]!.id)).toMatchObject({ state: 'ready', unverified: 0, uncovered: ['真空度'] })
   expect(said.at(-1)).toContain('这些知识点正文没有讲到：真空度')
-  const brief = await h.ctx.learnTutor.brief(course.id, await h.ctx.learnTutor.session(course.id))
-  expect(brief).toContain('这些知识点正文没有讲到：真空度')
+  expect(await h.ctx.learnTutor.brief(courseId, await h.ctx.learnTutor.session(courseId))).toContain('这些知识点正文没有讲到：真空度')
 })
 
-it('writes by subsection when the plan is unusable', async () => {
-  const h = harness(call => (isPlan(call) ? '我没法规划这一节。' : plain(call)))
-  const { course, lesson } = await setUp(h)
-  expect(await generate(h, lesson, 'confirm')).toBe('ready')
+it('writes the sections alone when the plan is unusable', async () => {
+  const course = await setUp(call => (isPlan(call) ? '我没法规划这一章。' : usual(call)), { lessons: THREE })
+  const { h, lessons } = course
+  expect(await confirm(course)).toBe('ready')
   expect(h.calls.filter(isPlan)).toHaveLength(1)
-  expect(h.calls.filter(isWriter).map(titleOf)[0]).toMatch(/^1\.2/)
-  expect(h.ctx.learnTextbook.blocks(course.id, lesson.textbookFile).length).toBeGreaterThan(0)
-  expect(h.ctx.learnTextbook.status(lesson.id).check?.notes).toContainEqual(expect.stringMatching(/^列要点没有成功，按小标题分了要点，没有写本节概念：/))
-  expect((await h.ctx.learnCore.files.read(course.id, lesson.textbookFile!))!.text).not.toContain('### 本节概念')
+  expect(h.calls.filter(call => call.purpose === 'learning-textbook').map(sectionOf).sort()).toEqual(THREE.map(lesson => `${lesson.number} ${lesson.title}`))
+  const text = await handoutText(course)
+  expect(text).not.toContain('### 本章速览')
+  expect(text).not.toContain('### 题型与方法')
+  expect(text).toContain('### 1.2.3 静力学基本方程')
+  expect(h.ctx.learnTextbook.status(lessons[0]!.id).notes).toContainEqual(expect.stringMatching(/^列提纲没有成功，只按小节写了讲解，没有本章速览、易混点和题型：/))
 })

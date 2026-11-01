@@ -60,9 +60,9 @@ declare module '@deepseek-ai/cordis' {
     'learning/task-done'(task: Task): void
     /** A test was submitted and graded (assess). */
     'learning/test-finished'(finished: { readonly test: Test }): void
-    /** One lesson's textbook was written (textbook). The stage can start once its first lesson is ready. */
+    /** A stage's handout was written (textbook); `lessonId` is its first lesson. The stage can start once it is ready. */
     'learning/textbook-ready'(ready: { readonly courseId: string; readonly stageId: string; readonly lessonId: string }): void
-    /** One lesson's textbook could not be written (textbook); `message` says why. */
+    /** A stage's handout could not be written (textbook); `lessonId` is its first lesson, `message` says why. */
     'learning/textbook-failed'(failed: { readonly courseId: string; readonly stageId: string; readonly lessonId: string; readonly message: string }): void
     /**
      * Something the learner did on a page, or a background job, finished; the teacher should hear

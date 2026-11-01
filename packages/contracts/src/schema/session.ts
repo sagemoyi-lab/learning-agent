@@ -58,7 +58,7 @@ export const SideChatDraft = z.object({
   sessionId,
   courseId: idOf('course'),
   targets: z.array(ChangeTarget).min(1),
-  /** What it would change, in the learner's words, e.g. `教材 1.2 流体静力学`, `课程路线`. */
+  /** What it would change, in the learner's words, e.g. `讲义 1.2 流体静力学`, `课程路线`. */
   label: z.string(),
   change: z.string(),
   reason: z.string(),

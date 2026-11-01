@@ -18,6 +18,16 @@ describe('one-shot model replies', () => {
     expect(result).toBe('{"ok":true}')
   })
 
+  it('hands the usage the stream reports to the caller, for the log', async () => {
+    const seen: unknown[] = []
+    await collectText(stream(
+      { type: 'text-delta', index: 0, text: '好' },
+      { type: 'usage', usage: { inputTokens: 120, outputTokens: 30, reasoningTokens: 20 } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ), usage => seen.push(usage))
+    expect(seen).toEqual([{ inputTokens: 120, outputTokens: 30, reasoningTokens: 20 }])
+  })
+
   it.each(['error', 'aborted'] as const)('rejects terminal %s even after partial text', async kind => {
     await expect(collectText(stream(
       { type: 'text-delta', index: 0, text: 'partial' },

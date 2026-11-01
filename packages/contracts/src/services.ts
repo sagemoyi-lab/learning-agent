@@ -856,6 +856,8 @@ export interface LearnCurriculum {
   lessons(stageId: string): Lesson[]
   lesson(lessonId: string): Lesson | undefined
   setLessonStatus(lessonId: string, status: Lesson['status']): Lesson
+  /** Point every lesson of the stage at `file`, the stage's handout once it replaces the lessons' own files of before 11-01. */
+  setTextbookFile(stageId: string, file: string): Lesson[]
   publishTask(input: Omit<Task, 'id' | 'status' | 'createdAt' | 'doneAt'>): Task
   completeTask(taskId: string, result?: Task['result']): Task
   tasks(courseId: string, filter?: { readonly status?: Task['status']; readonly lessonId?: string }): Task[]
@@ -875,9 +877,12 @@ export interface LearnCurriculum {
 
 export type BlockWithText = Block & { readonly text: string }
 
-/** Where one lesson's textbook stands. Kept in the database: a restart resumes queued and interrupted lessons. */
+/**
+ * Where the handout a lesson is read in stands: the stage's, which all its lessons share. Kept in the database:
+ * a restart resumes queued and interrupted stages.
+ */
 export interface LessonTextbookStatus {
-  /** `running` covers queued lessons too; `failed` is the last attempt's outcome. */
+  /** `running` covers queued handouts too; `failed` is the last attempt's outcome. */
   readonly state: 'missing' | 'running' | 'ready' | 'failed'
   /** Progress while running, the reason when failed. */
   readonly message?: string
@@ -885,26 +890,21 @@ export interface LessonTextbookStatus {
   readonly unverified?: number
   /** Failed attempts in a row since the last success. */
   readonly failures?: number
-  /** Titles of the knowledge points sourced in the lesson's material that no paragraph explains. */
+  /** Titles of the knowledge points sourced in the stage's material that no paragraph explains. */
   readonly uncovered?: readonly string[]
-  /** What the chapter's exercises need that no material explains (docs/textbook/design.md, 讲解与原文). */
+  /** What the chapter's exercises need that no material explains (docs/textbook/design.md). */
   readonly missing?: readonly string[]
-  /** The check of the published explanation, once it has one. */
-  readonly check?: {
-    /** `unchecked`: the check model failed for some paragraphs, which count as not checked. */
-    readonly state: 'checked' | 'unchecked'
-    /** Paragraphs edited since they were checked: their check no longer counts. */
-    readonly stale: number
-    /** Web pages quoted, invalid citations dropped, why the check did not finish. */
-    readonly notes: readonly string[]
-  }
-  /** While running: the step, when the writing started, and the points with those written so far. */
+  /** Paragraphs the learner changed in the reader: a regeneration replaces them. */
+  readonly edited?: number
+  /** What the program found while writing: web pages quoted, invalid citations dropped, exercises no type covers. */
+  readonly notes?: readonly string[]
+  /** While running: the step, when the writing started, and the parts with those written so far. */
   readonly progress?: {
     readonly step: 'plan' | 'write' | 'check' | 'publish'
     readonly startedAt: string
     readonly points: readonly { readonly title: string; readonly done: boolean }[]
   }
-  /** While running: the points written so far, as a preview of the lesson. */
+  /** While running: the parts written so far, as a preview of the handout. */
   readonly draft?: string
 }
 
@@ -930,18 +930,18 @@ export interface RevisionResult {
 }
 
 export interface LearnTextbook {
-  /** Generate (or regenerate) one lesson's textbook file in the background; emits `learning/textbook-ready` or `-failed`. */
+  /** Generate (or regenerate) the handout of the lesson's stage in the background; emits `learning/textbook-ready` or `-failed`. */
   generateLesson(lessonId: string): Promise<void>
-  /** Generate every lesson of a stage, in lesson order, so the first lesson is ready first. */
+  /** Generate (or regenerate) a stage's handout, one file its lessons share. */
   generateStage(stageId: string): Promise<void>
-  /** In-flight generation, by lesson id. */
+  /** In-flight generation, by lesson id: every lesson of a stage whose handout is being written. */
   running(): readonly string[]
   status(lessonId: string): LessonTextbookStatus
   blocks(courseId: string, file?: string): Block[]
   block(courseId: string, blockId: string): Promise<BlockWithText | undefined>
   /**
-   * Rewrite some paragraphs of a lesson by `instruction` (at most 8): the others keep their text and
-   * ids, a rewritten paragraph keeps its id, and what changed is checked again.
+   * Rewrite some paragraphs of the lesson's handout by `instruction` (at most 8): the others keep their text and
+   * ids, a rewritten paragraph keeps its id, and the program checks what changed again.
    */
   reviseBlocks(lessonId: string, input: { readonly blockIds: readonly string[]; readonly instruction: string }, meta: ChangeMeta): Promise<RevisionResult>
   /** The revisions a paragraph went through, oldest first. */

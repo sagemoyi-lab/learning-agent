@@ -442,10 +442,10 @@ function SourcePanel({ shell, id, layer, byId, courseId, onSelect, onClose }: {
   if (id.startsWith('tb:')) {
     const nodeIds = layer?.textbooks.find(item => `tb:${item.courseId}` === id)?.nodeIds ?? []
     return <>
-      {head('课程教材')}
-      <p className="la-small">教材段落讲到了这些节点：</p>
+      {head('课程讲义')}
+      <p className="la-small">讲义段落讲到了这些节点：</p>
       <div className="la-graph-block">{nodeIds.map(nodeId => <button key={nodeId} type="button" className="la-graph-relation" onClick={() => onSelect(nodeId)}>{byId.get(nodeId)?.title ?? '知识节点'}</button>)}</div>
-      {courseId && <Button size="sm" icon={BookOpen} opens onClick={() => shell.openPage('textbook.reader', {}, { title: '课程教材' })}>打开课程教材</Button>}
+      {courseId && <Button size="sm" icon={BookOpen} opens onClick={() => shell.openPage('textbook.reader', {}, { title: '课程讲义' })}>打开课程讲义</Button>}
     </>
   }
   const source = layer?.sources.find(item => `src:${item.id}` === id)

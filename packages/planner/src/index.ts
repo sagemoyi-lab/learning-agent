@@ -157,7 +157,7 @@ export function apply(ctx: Context, config: Config): void {
       lines.push(`学习者隔了 ${step.back.days} 天回来（上次学习是${dayText(Date.parse(step.back.at))}，${step.back.last}）。先欢迎回来，用一两句话帮学习者回顾上次学到哪里，再接着做下一步；不要列出落下的内容，也不要因此重新摸底。`)
     }
     if (step.review) {
-      lines.push(`可以复查（不急）：「${step.review.title}」，${step.review.reason}今天的复查已做 ${step.review.used} 道，每天建议 ${step.review.limit} 道。课时之间（学习者没在读教材、做测试时）可以问一句要不要先做一道；学习者同意就用 start_check 出题，不想做就接着学，不要再提。`)
+      lines.push(`可以复查（不急）：「${step.review.title}」，${step.review.reason}今天的复查已做 ${step.review.used} 道，每天建议 ${step.review.limit} 道。课时之间（学习者没在读讲义、做测试时）可以问一句要不要先做一道；学习者同意就用 start_check 出题，不想做就接着学，不要再提。`)
     }
     const missing = reviews.missing.get(request.courseId)
     if (missing?.length) {

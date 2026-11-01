@@ -150,7 +150,7 @@ function CourseSources({ courseId, importing: importFirst }: { courseId: string;
   return (
     <Page>
       <PageHeader eyebrow={<><Library size={14} strokeWidth={1.75} />本课资料</>} title="本课资料"
-        description="这门课用到的资料：教材、题目和老师的回答都以它们为依据。资料存在资料库里，从这里移出不会删掉，已有的出处仍能打开。"
+        description="这门课用到的资料：讲义、题目和老师的回答都以它们为依据。资料存在资料库里，从这里移出不会删掉，已有的出处仍能打开。"
         actions={<Button variant={adding ? 'default' : 'primary'} icon={adding ? X : Plus} onClick={() => setAdding(!adding)}>{adding ? '收起' : '从资料库加入'}</Button>} />
       <div className="la-stack" style={{ gap: 28 }}>
         {adding && <AddSources courseId={courseId} services={services.data} importFirst={importFirst} onAdded={sources.reload} />}
@@ -160,7 +160,7 @@ function CourseSources({ courseId, importing: importFirst }: { courseId: string;
         <ErrorText error={sources.error} />
         {!sources.data && sources.loading && <Skeleton lines={3} />}
         {empty && !adding && (
-          <div className="la-card"><EmptyState icon={BookOpen} title="本课还没有资料" description="从资料库加入一本教材当骨架教材，主老师就能按它排课、写教材。"
+          <div className="la-card"><EmptyState icon={BookOpen} title="本课还没有资料" description="从资料库加入一本教材当骨架教材，主老师就能按它排课、写讲义。"
             action={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>从资料库加入</Button>} /></div>
         )}
         {groups.map(group => (
@@ -195,7 +195,7 @@ function courseEntries(courseId: string, row: CourseRow, onChange: () => void): 
 const LESSON_LINKS = 8
 
 function LessonLinks({ lessons }: { lessons: readonly LessonUse[] }): ReactNode {
-  if (lessons.length === 0) return <div className="la-source-uses la-faint">教材还没有引用它</div>
+  if (lessons.length === 0) return <div className="la-source-uses la-faint">讲义还没有引用它</div>
   return (
     <div className="la-source-uses">
       <span>引用它的课时：</span>

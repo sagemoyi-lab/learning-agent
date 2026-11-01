@@ -988,7 +988,10 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 .la-md code { font: 0.88em var(--la-mono); background: var(--la-bg-sunken); padding: 1px 5px; border-radius: 5px; }
 .la-md pre { background: var(--la-bg-sunken); padding: 10px 12px; border-radius: 9px; overflow: auto; }
 .la-md pre code { padding: 0; background: none; }
-.la-md table { border-collapse: separate; border-spacing: 0; margin: 0.8em 0; border: 1px solid var(--la-line); border-radius: 9px; overflow: hidden; font-size: 0.94em; }
+/* A table scrolls sideways inside its frame (`.la-table`, html.ts) when the column is too narrow for it. */
+.la-md .la-table { margin: 0.8em 0; border: 1px solid var(--la-line); border-radius: 9px; overflow-x: auto; }
+.la-md table { border-collapse: separate; border-spacing: 0; margin: 0; font-size: 0.94em; }
+.la-textbook .la-table table { width: 100%; }
 .la-md th, .la-md td { padding: 6px 12px; border-bottom: 1px solid var(--la-line-faint); text-align: left; }
 /* Short headers and words (结果、做到了) stay on one line while long columns wrap. */
 .la-md th { white-space: nowrap; }
@@ -1015,9 +1018,10 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 /* textbook mode */
 .la-textbook { font-size: var(--la-fs-xl); line-height: 1.85; }
 .la-textbook h1, .la-textbook h2, .la-textbook h3 { margin-top: 1.6em; }
-/* A lesson's two parts, 本节概念 and 知识点, stand above the points under 知识点 (docs/textbook/design.md). */
+/* A handout's parts and sections (本章速览, 1.2 …, 易混点, 题型与方法) stand above their tables and types (docs/textbook/design.md). */
 .la-textbook h3 { font-size: 1.25em; margin-top: 2em; }
 .la-textbook h4 { font-size: 1.05em; }
+.la-textbook h3 .la-cite { vertical-align: 0.2em; }
 .la-textbook > .la-block-plain:first-child > h1:first-child, .la-textbook > .la-block-plain:first-child > h2:first-child { margin-top: 0; }
 /* Each heading sits in its own block, and the blocks reset their first child's top margin; give the space back. */
 .la-textbook > :is(.la-block, .la-block-plain):not(:first-child) > :is(h1, h2, h3, h4):first-child { margin-top: 1.6em; }
@@ -1027,6 +1031,12 @@ button.la-lib-chevron:focus-visible { box-shadow: var(--la-ring); }
 /* The check found something: a thin rule in the margin; the header tag makes it a band. */
 .la-block.is-flagged:not(.is-selected) { box-shadow: inset 2px 0 0 var(--la-warn-line); }
 .la-block.is-flagged.is-marked:not(.is-selected) { background: var(--la-warn-soft); box-shadow: inset 3px 0 0 var(--la-warn); }
+/* The learner edits a paragraph in place: the editor below takes its room. */
+.la-block.is-editing { display: none; }
+.la-block-editor { display: grid; gap: 8px; margin: 6px 0 14px; font-size: var(--la-fs-md); line-height: 1.6; }
+.la-block-editor-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.la-block-editor-actions > .la-faint { margin-right: auto; }
+.la-read-done { margin: 20px 0 8px; font-size: var(--la-fs-md); line-height: 1.6; }
 /* The bar over selected text, and the sources and check it opens. */
 .la-select-bar { position: absolute; z-index: 6; width: max-content; display: grid; justify-items: end; gap: 6px; animation: la-pop 0.12s var(--la-ease); }
 .la-select-bar .la-confirm { box-shadow: var(--la-shadow-md); background: var(--la-bg-raised); }

@@ -1,4 +1,4 @@
-// Textbook file format (contracts §3.2): blocks end with ` ^id` (display math and quote boxes: `^id` on a
+// Handout file format (contracts §3.2): blocks end with ` ^id` (display math, tables and quote boxes: `^id` on a
 // line of its own), citations are `[label](cite:ck_…)` or a web page's address, source text copied in is a
 // `> [!quote]` box (embed.ts). `finalize` turns a model draft into that format; `indexBlocks` reads it back.
 // Files written before 10-15 may still carry `[待核实](cite:unverified)`; it is read, never written.
@@ -75,6 +75,12 @@ function isDisplayMath(piece: string): boolean {
   return /^\$\$[\s\S]*\$\$$/.test(piece.trim())
 }
 
+/** A Markdown table: every line a row of cells, the second the delimiter row. */
+export function isTable(piece: string): boolean {
+  const lines = piece.trim().split('\n')
+  return lines.length >= 2 && lines.every(line => /^\|.*\|$/.test(line.trim())) && /^\|(?:\s*:?-+:?\s*\|)+$/.test(lines[1]!.trim())
+}
+
 /** Strip code fences and frontmatter a model sometimes wraps its answer in. */
 function unwrap(draft: string): string {
   let text = draft.trim()
@@ -90,7 +96,6 @@ function dollarMath(text: string): string {
     .replace(/\\\((.+?)\\\)/g, (_, tex: string) => `$${tex.trim()}$`)
 }
 
-const LIST_ITEM = /^\s*(?:[-*+]|\d+[.、)])\s+/
 
 /** Headings whose blocks ask the learner questions instead of explaining (files written before 10-31). */
 const QUESTION_HEADING = /读完就答/
@@ -106,6 +111,8 @@ export interface FinalizeOptions {
   readonly embed?: EmbedSource
   readonly newBlockId: () => string
   readonly reuse?: (text: string) => string | undefined
+  /** Embeds kept, in order; those after are dropped. */
+  readonly embedLimit?: number
 }
 
 /** A quote box the model wrote itself is not source text: it becomes an ordinary paragraph. */
@@ -114,9 +121,10 @@ function unquote(piece: string): string {
 }
 
 /**
- * Turn a model draft into a textbook body: embeds become quote boxes of source text; every non-heading
+ * Turn a model draft into a handout body: embeds become quote boxes of source text; every non-heading
  * block gets an id (`reuse` keeps the old id of a block whose text is unchanged); citations to chunks that
- * are not known sources and links to pages not given are dropped. `dropped` says what was left out and why.
+ * are not known sources and links to pages not given are dropped, and a source cited twice in one paragraph
+ * shows once. `dropped` says what was left out and why.
  */
 export function finalize(draft: string, options: FinalizeOptions): { body: string; blocks: BlockIndex[]; dropped: string[] } {
   const dropped: string[] = []
@@ -130,15 +138,24 @@ export function finalize(draft: string, options: FinalizeOptions): { body: strin
     else pieces.push(piece)
   }
   const idOf = (text: string) => options.reuse?.(text) ?? options.newBlockId()
+  let embeds = 0
   const boxes = (from: string, to: string | undefined) => {
     if (!options.embed) { dropped.push(`嵌入 ${from} 没有可用的资料`); return [] }
+    if (options.embedLimit !== undefined && embeds >= options.embedLimit) { dropped.push(`嵌入 ${from} 超过了每节 ${options.embedLimit} 处`); return [] }
     const result = expandEmbed(from, to, options.embed)
     if ('error' in result) { dropped.push(`嵌入：${result.error}`); return [] }
+    embeds += 1
     return result.boxes
   }
-  const prose = (raw: string) => {
+  /** A paragraph, or a table (its id on a line of its own; a source may be cited on several rows). */
+  const prose = (raw: string, table = false) => {
+    const seen = new Set<string>()
     let piece = raw.replace(CITE, (link, _label: string, target: string) => {
-      if (target !== 'unverified' && options.knownChunk(target)) return link
+      if (target !== 'unverified' && options.knownChunk(target)) {
+        if (seen.has(target) && !table) return ''
+        seen.add(target)
+        return link
+      }
       if (target !== 'unverified') dropped.push(`出处 ${target} 不在给出的资料里`)
       return ''
     })
@@ -148,13 +165,14 @@ export function finalize(draft: string, options: FinalizeOptions): { body: strin
       dropped.push(`网址 ${url} 不是给出的网页`)
       // A label that only names the site says nothing once the link is gone.
       return siteName(label, url) ? '' : label
-    }).replace(BETWEEN_LINKS, '$1').replace(TRAILING_COMMA, '$1').replace(LEADING_COMMA, '$1').replace(/[ \t]+$/gm, '').trim()
-    if (piece) out.push(`${piece} ^${idOf(piece)}`)
+    }).replace(BETWEEN_LINKS, '$1').replace(TRAILING_COMMA, '$1').replace(LEADING_COMMA, '$1').replace(/([，、,；;])(?:\s*[，、,；;])+/g, '$1').replace(/[ \t]+$/gm, '').trim()
+    if (piece) out.push(table ? `${piece}\n\n^${idOf(piece)}` : `${piece} ^${idOf(piece)}`)
   }
   const box = (item: string) => out.push(`${item}\n\n^${idOf(item)}`)
   for (const raw of pieces.map(piece => piece.replace(TRAILING_ID, '')).filter(piece => !LONE_ID.test(piece))) {
     if (isHeading(raw)) { out.push(raw); continue }
     if (isDisplayMath(raw)) { out.push(`${raw}\n^${idOf(raw)}`); continue }
+    if (isTable(raw)) { prose(raw, true); continue }
     if (isOriginal(raw)) { prose(unquote(raw)); continue }
     // Embeds on lines of their own split the paragraph; one left inside a sentence goes after it.
     let text: string[] = []
@@ -237,115 +255,24 @@ export function indexBlocks(text: string): BlockIndex[] {
 }
 
 /**
- * A point's reply as part of the lesson's 知识点: under the point's own heading (none when the point is the
- * whole lesson, or the second half of a long one), headings inside it one level lower. The lesson's own
- * title is the program's; recall questions a writer adds anyway are left out (10-31).
+ * A writer's reply without the headings it should not have written (the program writes the handout's) and
+ * without recall questions (10-31). `keep` is the heading level the reply may use, as the types do (`####`);
+ * deeper headings become that level.
  */
-export function pointText(reply: string, title: string | undefined): string {
-  const lines = reply.trim().replace(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/, '$1').split(/\r?\n/)
+export function replyBody(reply: string, keep?: number): string {
+  const lines = unwrap(reply).split(/\r?\n/)
   const out: string[] = []
   let skipping = false
-  let opening = true
   for (const line of lines) {
     const heading = /^(#{1,6})\s+(.*)$/.exec(line.trim())
     if (heading) {
       skipping = /读完就答/.test(heading[2]!)
-      if (skipping) { opening = false; continue }
-      // The lesson's title, and the point's own heading before any text: the program writes them.
-      if (heading[1]!.length <= 2) continue
-      if (opening) { opening = false; continue }
-      out.push(`${'#'.repeat(Math.max(5, heading[1]!.length))} ${heading[2]}`)
+      if (!skipping && keep && heading[1]!.length >= keep) out.push(`${'#'.repeat(keep)} ${heading[2]!.trim()}`)
       continue
     }
-    if (skipping) continue
-    if (line.trim()) opening = false
-    out.push(line)
+    if (!skipping) out.push(line)
   }
-  const body = out.join('\n').trim()
-  return title ? `#### ${title}\n\n${body}` : body
-}
-
-/** A paragraph of 本节概念: `**name**：` and its explanation. */
-const CONCEPT = /^\*\*([^*\n]+)\*\*[：:]/
-
-/** The paragraphs of 本节概念 in a lesson, by block id, with the concept each explains. */
-export function conceptBlocks(text: string): Map<string, string> {
-  const out = new Map<string, string>()
-  let inside = false
-  for (const piece of splitPieces(parseFrontmatter(text).body)) {
-    if (isHeading(piece)) { inside = /^#{1,6}\s+本节概念/.test(piece); continue }
-    const [block] = inside ? indexBlocks(piece) : []
-    const name = block ? CONCEPT.exec(block.text)?.[1] : undefined
-    if (block && name) out.set(block.id, name.trim())
-  }
-  return out
-}
-
-/** A rewritten concept paragraph kept as one paragraph of `**name**：…`, without source text copied in. */
-export function asConcept(name: string, text: string): string {
-  const own = splitPieces(unwrap(text)).filter(piece => !isHeading(piece) && !isOriginal(piece) && !EMBED_LINE.test(piece.trim()))
-  const joined = own.map(piece => piece.replace(EMBED_ANYWHERE, '').trim()).join('')
-  return CONCEPT.test(joined) ? joined : `**${name}**：${joined}`
-}
-
-/**
- * 本节概念 from its writer's reply: one paragraph per concept (a list the writer made anyway is taken apart),
- * then the program's note of the concepts the material does not explain.
- */
-export function conceptsText(reply: string, missing: readonly string[]): string {
-  const entries = splitPieces(unwrap(reply)).filter(piece => !isHeading(piece)).flatMap(piece => {
-    const items: string[][] = []
-    for (const line of piece.split('\n')) {
-      if (LIST_ITEM.test(line) || items.length === 0) items.push([line.replace(LIST_ITEM, '')])
-      else items.at(-1)!.push(line.trim())
-    }
-    return items.map(item => item.join('\n').trim()).filter(Boolean)
-  })
-  const note = missing.length ? [`> [!note] 资料里没有讲到：${missing.join('；')}。可以问主老师，或在资料库里加一份讲它的资料。`] : []
-  return ['### 本节概念', ...entries, ...note].join('\n\n')
-}
-
-/** Rough prompt cost of a chunk: its text plus the id and citation label written before it. */
-export function materialSize(chunk: { readonly text: string }): number {
-  return chunk.text.length + 80
-}
-
-/**
- * Split a lesson's material into parts the writer can handle in one reply, in reading order.
- * Parts start at headings where possible: the material is cut into heading-led runs, small runs are
- * packed together up to `limit`, and a run larger than `limit` is cut between its chunks.
- */
-export function planParts<T extends { readonly kind: string; readonly text: string }>(chunks: readonly T[], limit: number): T[][] {
-  const runs: T[][] = []
-  for (const chunk of chunks) {
-    if (chunk.kind === 'heading' || runs.length === 0) runs.push([chunk])
-    else runs.at(-1)!.push(chunk)
-  }
-  const parts: T[][] = []
-  let current: T[] = []
-  let size = 0
-  const add = (chunk: T) => {
-    const cost = materialSize(chunk)
-    if (current.length > 0 && size + cost > limit) {
-      parts.push(current)
-      current = []
-      size = 0
-    }
-    current.push(chunk)
-    size += cost
-  }
-  for (const run of runs) {
-    const cost = run.reduce((sum, chunk) => sum + materialSize(chunk), 0)
-    // A run that fits in a fresh part starts one rather than being split across two.
-    if (current.length > 0 && size + cost > limit && cost <= limit) {
-      parts.push(current)
-      current = []
-      size = 0
-    }
-    for (const chunk of run) add(chunk)
-  }
-  if (current.length > 0) parts.push(current)
-  return parts
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 /** Halve a part that was still too long for one reply, cutting at the heading nearest the middle. */

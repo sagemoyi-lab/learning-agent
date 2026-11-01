@@ -1,12 +1,13 @@
-import type { StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { LearningApiError } from '@learning-agent/contracts'
 
 /** A failed or truncated one-shot must never become a saved textbook or grading result. */
-export async function collectText(stream: AsyncIterable<StreamChunk>): Promise<string> {
+export async function collectText(stream: AsyncIterable<StreamChunk>, onUsage?: (usage: TokenUsage) => void): Promise<string> {
   let text = ''
   let finished = false
   for await (const chunk of stream) {
     if (chunk.type === 'text-delta') text += chunk.text
+    if (chunk.type === 'usage') onUsage?.(chunk.usage)
     if (chunk.type !== 'finish') continue
     finished = true
     const reason = chunk.reason

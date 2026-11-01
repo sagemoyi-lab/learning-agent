@@ -1,5 +1,5 @@
 // curriculum (docs/curriculum/design.md): a remedial stage after a failed complete task —
-// its design brief, a corrective lesson instead of the whole section again, a retest with a complete
+// its design brief, a corrective handout instead of the whole section again, a retest with a complete
 // task, and a node failing again with its prerequisites shown. Synthetic course; fake model.
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it } from 'vitest'
@@ -54,7 +54,8 @@ function finishLessons(stage: Stage): void {
 
 beforeAll(async () => {
   h = createHarness(call => {
-    if (call.purpose === 'learning-textbook') return '## 1.1 静水压强（补课）\n\n多步题先列已知量。'
+    if (call.purpose === 'learning-textbook-plan') return JSON.stringify({ overview: '', terms: [], formulas: [], needs: [], confusions: [], types: [] })
+    if (call.purpose === 'learning-textbook') return '多步题先列已知量。'
     throw new Error(`unexpected model call: ${call.purpose}`)
   })
   courseId = (await h.endpoint('core', 'createCourse', { title: '课程设计 B（合成资料）' })).id
@@ -80,7 +81,7 @@ beforeAll(async () => {
 
 afterAll(() => h.dispose())
 
-it('designs a remedial stage from the review, writes a corrective lesson, and retests with a complete task', async () => {
+it('designs a remedial stage from the review, writes a corrective handout, and retests with a complete task', async () => {
   await run('save_roadmap', { stages: [{ title: '静力学', objective: '读压差计算压差', supports: ['c1'] }, { title: '流动', objective: '列伯努利方程' }] })
   const first = stageNamed('静力学')
   await run('save_stage_design', { stageId: first.id, markdown: '# 阶段 1 设计', lessons: [{ number: '1.1', title: '静水压强' }], nodes: ['静力学', '压差计'] })
@@ -111,19 +112,22 @@ it('designs a remedial stage from the review, writes a corrective lesson, and re
   const taskAgain = task()
   expect(await brief()).not.toMatch(/阶段 2 的阶段测试备题不够/)
 
-  // A corrective lesson: one reply, told to mend what the review found rather than retell the section.
+  // A corrective handout: planned for what the review found, its section told to mend that rather than retell it.
   await run('save_stage_design', { stageId: remedial.id, markdown: '# 补课设计\n\n换一种讲法：先列已知量再排顺序。', lessons: [{ number: '1.1', title: '多步串联' }] })
   const lesson = h.ctx.learnCurriculum.lessons(remedial.id)[0]!
   const before = h.calls.length
   const settled = textbookSettled(h.ctx, lesson.id)
   await h.endpoint('curriculum', 'confirmDesign', { stageId: remedial.id })
   expect(await settled).toBe('ready')
+  const plans = h.calls.slice(before).filter(call => call.purpose === 'learning-textbook-plan')
+  expect(plans).toHaveLength(1)
+  expect(plans[0]!.prompt).toContain('这是补课阶段：只为复盘里没过的地方规划')
+  expect(plans[0]!.prompt).toContain('单步都会，几步串起来就乱')
   const writes = h.calls.slice(before).filter(call => call.purpose === 'learning-textbook')
   expect(writes).toHaveLength(1)
-  expect(writes[0]!.prompt).toContain('这是补课课时：学习者已经学过这一节')
+  expect(writes[0]!.prompt).toContain('这是补课阶段：学习者已经学过这些小节')
   expect(writes[0]!.prompt).toContain('## 上一阶段的复盘')
   expect(writes[0]!.prompt).toContain('单步都会，几步串起来就乱')
-  expect(writes[0]!.prompt).toContain('补课课时，按上面"补课"的要求写，不写整节。')
 
   // The retest: its own nodes and a complete task; 静力学 fails again, with its prerequisite shown.
   finishLessons(h.ctx.learnCurriculum.stage(remedial.id)!)
