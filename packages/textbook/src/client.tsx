@@ -45,13 +45,10 @@ function TextbookServices({ access }: { access: SettingsAccess }): ReactNode {
   )
 }
 
-/** A paragraph the reader marks in the margin (`textbook.checks`). */
-type Mark = 'flagged' | 'unchecked' | 'stale'
-
 /** One paragraph's sources and check (`textbook.blockInfo`); index.ts keeps the same shape. */
 type BlockInfo = {
   kind: 'original' | 'explanation' | 'recall'
-  state: 'ok' | Mark | 'none'
+  state: 'ok' | 'flagged' | 'unchecked' | 'stale' | 'none'
   note: string
   sources: { chunkId: string; citation: string; text: string }[]
   web: { url: string; title: string; site: string; passage: string }[]
@@ -202,7 +199,8 @@ type Bar = { pick: TextPick; top: number; right: number }
 function Reader({ courseId, lessonId, renderSlot }: { courseId: string; lessonId: string; renderSlot: PropsRenderSlots<'learning.reader-notes'>['renderSlot'] }): ReactNode {
   // Reloads on every change-feed message, generation progress included.
   const view = useLoad(shell, () => shell.call<LessonView>('textbook', 'lesson', { lessonId }), [lessonId])
-  const marks = useLoad(shell, () => shell.call<Record<string, Mark>>('textbook', 'checks', { lessonId }), [lessonId])
+  // The paragraphs to read with care, marked in the margin.
+  const flagged = useLoad(shell, () => shell.call<string[]>('textbook', 'flagged', { lessonId }), [lessonId])
   const [marking, setMarking] = useState(false)
   const tasks = useLoad(shell, () => shell.call<{ tasks: Task[] }>('curriculum', 'overview', { courseId }).then(overview => overview.tasks), [courseId])
   const selection = useSelection(shell)
@@ -317,7 +315,7 @@ function Reader({ courseId, lessonId, renderSlot }: { courseId: string; lessonId
         )}
         {!data.text && !running && status.state !== 'failed' && (
           <div className="la-card">
-            <EmptyState icon={Sparkles} title="这一节的教材还没有生成" description="教材用适合你的话讲重点，原书的公式、图和例题原样放在讲解旁边。"
+            <EmptyState icon={Sparkles} title="这一节的教材还没有生成" description="教材先讲本节要知道的概念，再用适合你的话讲知识点；原书的公式、图和例题原样放在讲解旁边。"
               action={<Button variant="primary" icon={Sparkles} loading={regenerate.busy} onClick={generate}>生成本节教材</Button>} />
           </div>
         )}
@@ -331,10 +329,7 @@ function Reader({ courseId, lessonId, renderSlot }: { courseId: string; lessonId
             {...(selectedBlock ? { selectedBlock } : {})}
             {...(running && status.draft ? {} : { onSelect: select })}
             onCite={openSource}
-            blockClass={blockId => {
-              const mark = marks.data?.[blockId]
-              return mark === 'flagged' ? `is-flagged${marking ? ' is-marked' : ''}` : undefined
-            }}
+            blockClass={blockId => (flagged.data?.includes(blockId) ? `is-flagged${marking ? ' is-marked' : ''}` : undefined)}
             afterBlock={blockId => renderSlot('learning.reader-notes', { part: 'notes', courseId, blockId }, { fallback: null })}
           />
           {place && (

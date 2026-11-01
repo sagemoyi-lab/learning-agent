@@ -1,5 +1,5 @@
 // annotation unit, browser half (docs/annotation/design.md). Four places:
-// - inside the textbook reader (the `learning.reader-notes` slot): the 批注 menu next to 就这段提问; each note's quote
+// - inside the textbook reader (the `learning.reader-notes` slot): the 批注 menu in the selection bar; each note's quote
 //   painted in the paragraph (marks.ts), and under the paragraph one line per note that opens into the note;
 // - beside a source's recognized text in the library reader (`learning.source-notes`), the same for a chunk;
 // - the 批注 page: every note of the course, grouped by where it was made, with the way back there;
@@ -177,7 +177,10 @@ function SourceNotes(props: SourceNotesProps): ReactNode {
   return props.part === 'actions' ? <NoteMenu courseId={props.courseId} spot={spot} /> : <SpotNotes courseId={props.courseId} spot={spot} />
 }
 
-/** Next to 就这段提问: note the selected text, or the whole paragraph (or source chunk) when it was only clicked. */
+/**
+ * Beside 提问: note the selected text. In the textbook there is always some (the bar shows only for a selection); in
+ * the library a chunk only clicked is noted as a whole.
+ */
 function NoteMenu({ courseId, spot }: { courseId: string; spot: Spot }): ReactNode {
   const selection = useSelection(shell)
   const picked = selection?.selected?.kind === spot.kind && selection.selected.id === spotId(spot) ? selection.selected.quote : undefined

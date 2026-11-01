@@ -123,13 +123,10 @@ type BlockCheck = z.infer<typeof BlockCheck>
 const WebUse = z.object({ url: z.string(), title: z.string(), site: z.string(), level: z.string(), passages: z.array(z.string()) })
 type WebUse = z.infer<typeof WebUse>
 
-/** The state of a paragraph shown in the reader's margin (`textbook.checks`). */
-type CheckState = 'flagged' | 'unchecked' | 'stale'
-
 /** One paragraph's sources and check, as the reader shows it when asked (`textbook.blockInfo`); client.tsx keeps the same shape. */
 interface BlockInfo {
   readonly kind: 'original' | 'explanation' | 'recall'
-  readonly state: 'ok' | CheckState | 'none'
+  readonly state: 'ok' | 'flagged' | 'unchecked' | 'stale' | 'none'
   readonly note: string
   readonly sources: readonly { readonly chunkId: string; readonly citation: string; readonly text: string }[]
   readonly web: readonly { readonly url: string; readonly title: string; readonly site: string; readonly passage: string }[]
@@ -539,20 +536,15 @@ class LearnTextbookService extends Service implements LearnTextbook {
     return { lesson: about, nodeIds, from: 'material' }
   }
 
-  /** The paragraphs of a lesson the reader marks in the margin: to read with care, not checked, or edited since. */
-  checkMarks(lessonId: string): Record<string, CheckState> {
+  /**
+   * The paragraphs of a lesson the reader marks in the margin: the ones to read with care. Paragraphs not checked or
+   * edited since are counted in the page header and told in 出处与核对, not marked.
+   */
+  flaggedBlocks(lessonId: string): string[] {
     const lesson = this.ctx.learnCurriculum.lesson(lessonId)
     const stage = lesson ? this.ctx.learnCurriculum.stage(lesson.stageId) : undefined
-    if (!lesson?.textbookFile || !stage) return {}
-    const checks = this.checks(stage.courseId, lesson.textbookFile)
-    const marks: Record<string, CheckState> = {}
-    for (const block of this.blocks(stage.courseId, lesson.textbookFile)) {
-      const check = checks.get(block.id)
-      if (block.unverified) marks[block.id] = 'flagged'
-      else if (check && check.hash !== block.hash) marks[block.id] = 'stale'
-      else if (check?.verdict === 'unchecked') marks[block.id] = 'unchecked'
-    }
-    return marks
+    if (!lesson?.textbookFile || !stage) return []
+    return this.blocks(stage.courseId, lesson.textbookFile).filter(block => block.unverified).map(block => block.id)
   }
 
   /** One paragraph's sources (with their text) and check, in the learner's words. No internal ids beyond what opens a source. */
@@ -1195,10 +1187,10 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.effect(() => endpoint({
     unit: 'textbook',
-    method: 'checks',
+    method: 'flagged',
     input: z.object({ lessonId: z.string() }),
-    handle: ({ lessonId }) => textbook.checkMarks(lessonId),
-  }), 'textbook: checks')
+    handle: ({ lessonId }) => textbook.flaggedBlocks(lessonId),
+  }), 'textbook: flagged')
 
   ctx.effect(() => endpoint({
     unit: 'textbook',
@@ -1272,7 +1264,11 @@ export function apply(ctx: Context, config: Config): void {
     const picked = selection.selected
     if (picked?.kind === 'block' && picked.id && selection.courseId) {
       const block = await textbook.block(selection.courseId, picked.id)
-      if (block) lines.push(`选中的教材段落（${picked.label}${block.original ? '，资料原文' : ''}，块 ${block.id}）：\n${block.text}`)
+      if (block) {
+        // The learner selects a sentence; the paragraph around it is context.
+        const where = `${picked.label}${block.original ? '，资料原文' : ''}，块 ${block.id}`
+        lines.push(picked.quote ? `学习者选中的原句：「${picked.quote.exact}」\n所在的教材段落（${where}）：\n${block.text}` : `选中的教材段落（${where}）：\n${block.text}`)
+      }
     }
     return lines
   })

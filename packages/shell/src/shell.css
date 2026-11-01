@@ -1405,7 +1405,6 @@ details.la-quote-box:not([open]) { padding-bottom: 8px; }
 .la-node-state { display: flex; align-items: center; gap: 6px; font-size: var(--la-fs-xs); color: var(--la-text-2); }
 .la-node-next { display: flex; gap: 8px; margin: 4px 0 0; font-size: var(--la-fs-sm); }
 .la-edge { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.la-edge-arrow { color: var(--la-text-4); }
 
 /* ── library ── */
 .la-source-icon { width: 36px; height: 44px; border-radius: 6px 9px 9px 6px; box-shadow: inset 3px 0 0 var(--la-accent-line); }

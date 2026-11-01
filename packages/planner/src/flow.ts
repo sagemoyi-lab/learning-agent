@@ -63,16 +63,16 @@ export function mainStep(ctx: Context, courseId: string, goal: GoalDoc | undefin
   for (const lesson of learnCurriculum.lessons(stage.id)) {
     if (lesson.status === 'done') continue
     const textbook = learnTextbook.status(lesson.id)
-    if (textbook.state === 'running') return step(`textbook.wait:${lesson.id}`, 'none', `等教材 ${lesson.number} 生成`, `${textbook.message || '正在生成'}。长的小节要几分钟，生成好了主老师会接着上课。`, 'textbook.reader', { id: lesson.id })
+    if (textbook.state === 'running') return step(`textbook.wait:${lesson.id}`, 'none', `等教材 ${lesson.number} 生成`, `${textbook.message || '正在生成'}。长的小节要十几分钟，生成好了主老师会接着上课。`, 'textbook.reader', { id: lesson.id })
     if (textbook.state === 'failed' && (textbook.failures ?? 1) >= 2) return step(`textbook.retry:${lesson.id}`, 'learner', `教材 ${lesson.number} 生成失败`, `已经连续失败 ${textbook.failures} 次，最近一次的原因：${textbook.message}。可以稍后在教材页点"生成本节教材"再试。`, 'textbook.reader', { id: lesson.id })
     if (textbook.state === 'failed') return step(`textbook.regenerate:${lesson.id}`, 'teacher', `教材 ${lesson.number} 生成失败`, `失败原因：${textbook.message}。告诉学习者发生了什么，然后用 regenerate_textbook（lessonId="${lesson.id}"）重试一次；再失败就请学习者稍后在教材页点"生成本节教材"。`, 'tutor.chat')
     if (textbook.state === 'missing') return step(`textbook.write:${lesson.id}`, 'teacher', `生成教材 ${lesson.number}`, `课时 ${lesson.number} ${lesson.title} 还没有教材，用 regenerate_textbook（lessonId="${lesson.id}"）生成。`, 'tutor.chat')
     const read = learnCurriculum.tasks(courseId, { lessonId: lesson.id }).find(task => task.kind === 'read')
     if (!read) return step(`read.publish:${lesson.id}`, 'teacher', `发布 ${lesson.number} 的阅读任务`, `用 publish_task 发布课时 ${lesson.number} ${lesson.title}（${lesson.id}）的阅读任务，写清读哪里。`, 'tutor.chat')
-    if (read.status === 'open') return step(`read.do:${read.id}`, 'learner', `读教材 ${lesson.number} ${lesson.title}`, '读完在"课程进度"页点"完成"，或者告诉主老师。读的时候随时可以选中一句话，在右侧提问。', 'textbook.reader', { id: lesson.id })
+    if (read.status === 'open') return step(`read.do:${read.id}`, 'learner', `读教材 ${lesson.number} ${lesson.title}`, '读完点教材末尾的"读完了"（或在"课程进度"页点"完成"），也可以告诉主老师。读的时候随时可以选中一句话，在右侧提问。', 'textbook.reader', { id: lesson.id })
     // A withdrawn quiz is published again; the lesson summary needs one handed in.
     const quiz = learnAssess.tests(courseId, { lessonId: lesson.id, kind: 'quiz' }).filter(test => test.status !== 'abandoned').at(-1)
-    if (!quiz) return step(`quiz.publish:${lesson.id}`, 'teacher', `出 ${lesson.number} 的小测`, `先 read_lesson_textbook 读本节教材，再出 2–3 道凭记忆作答的小测题（优先用资料里的题，add_problems），用 start_test(kind="quiz", lessonId="${lesson.id}") 发布。`, 'tutor.chat')
+    if (!quiz) return step(`quiz.publish:${lesson.id}`, 'teacher', `出 ${lesson.number} 的小测`, `先 read_lesson_textbook 读本节教材，再出 2–3 道凭记忆作答的小测题（先用 import_exercises 导入本节习题，没有合适的再 add_problems），用 start_test(kind="quiz", lessonId="${lesson.id}") 发布。`, 'tutor.chat')
     if (quiz.status === 'open') return doTest(quiz, `做 ${lesson.number} 的小测`, '凭记忆作答。')
     return step(`lesson.summary:${lesson.id}`, 'teacher', `${lesson.number} 的汇报和小结`, `用 get_test_result 看小测结果，请学习者用一两句话说说学到了什么、哪里还不清楚，然后 write_lesson_summary 写小结（lessonId="${lesson.id}"）。`, 'tutor.chat')
   }

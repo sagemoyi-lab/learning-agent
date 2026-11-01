@@ -122,7 +122,7 @@ it('flags explanation the material does not support, by rule and by the check, i
   expect(await h!.endpoint<Info>('textbook', 'blockInfo', { courseId: course.id, blockId: cooking.id })).toMatchObject({ state: 'flagged', note: '资料里没有说压强计能做饭' })
   const record = await blockOf(course.id, lesson, '记录压强时要写明')
   expect(record.citations).toHaveLength(1)
-  expect(await h!.endpoint('textbook', 'checks', { lessonId: lesson.id })).toEqual({ [number.id]: 'flagged', [cooking.id]: 'flagged' })
+  expect(new Set(await h!.endpoint<string[]>('textbook', 'flagged', { lessonId: lesson.id }))).toEqual(new Set([number.id, cooking.id]))
 
   // The teacher reads the lesson with the flagged paragraphs listed at the end.
   const tools = new Map<string, { execute(args: unknown, exec: unknown): Promise<string> }>()
@@ -141,9 +141,9 @@ it('publishes a lesson whose check failed as not checked, without flagging anyth
   expect(await generate(lesson)).toBe('ready')
   const status = h!.ctx.learnTextbook.status(lesson.id)
   expect(status).toMatchObject({ state: 'ready', unverified: 0, check: { state: 'unchecked', notes: expect.arrayContaining([expect.stringContaining('核对服务暂时不可用')]) } })
-  const marks = await h!.endpoint<Record<string, string>>('textbook', 'checks', { lessonId: lesson.id })
-  expect(Object.values(marks).length).toBeGreaterThan(0)
-  expect(new Set(Object.values(marks))).toEqual(new Set(['unchecked']))
+  expect(await h!.endpoint('textbook', 'flagged', { lessonId: lesson.id })).toEqual([])
+  const first = h!.ctx.learnTextbook.blocks(course.id, lesson.textbookFile).find(block => !block.original)!
+  expect(await h!.endpoint('textbook', 'blockInfo', { courseId: course.id, blockId: first.id })).toMatchObject({ state: 'unchecked' })
   expect(h!.ctx.learnTextbook.blocks(course.id, lesson.textbookFile).some(block => block.original)).toBe(true)
 })
 

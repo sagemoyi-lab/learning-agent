@@ -1,11 +1,12 @@
 // sidechat (docs/sidechat/design.md): limits on the tools (read-only, and only how-to questions while a test is
-// open), the open chat's name, creating a chat that fails, and the first-turn context from the persisted record. The
-// record, the summary and closing are in record-and-closing.test.ts.
+// open), the open chat's name, creating a chat that fails, and the first-turn context (the selected sentence with its
+// paragraph) from the persisted record. The record, the summary and closing are in record-and-closing.test.ts.
 // Real units on the harness; the model, the DSH sessions and their record are fakes.
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Id } from '@learning-agent/contracts'
 import { allowTool } from '../../packages/kit/src/index.ts'
 import { createHarness, type Harness } from '../harness.ts'
+import { lessonCourse, lessonText } from '../lesson-setup.ts'
 
 let h: Harness | undefined
 afterEach(() => { vi.restoreAllMocks(); h?.dispose(); h = undefined })
@@ -143,6 +144,32 @@ it('puts the selection’s context into the first request once, and again only w
   // Only a turn's first step is touched, and the second turn finds the context already given.
   expect(await preStep(side.sessionId, 2)).toEqual([])
   expect(await preStep(side.sessionId)).toEqual([])
+})
+
+it('tells the chat the sentence the learner selected, with the paragraph or source text around it', async () => {
+  h = createHarness(call => lessonText(call) ?? reply())
+  const { courseId, lesson } = await lessonCourse(h, '侧边会话选区（合成资料）')
+  const file = (await h.ctx.learnCore.files.read(courseId, lesson.textbookFile!))!.text
+  const blockId = /计算。.*\^([0-9a-z]{6})/.exec(file)![1]!
+  const chunk = h.ctx.learnLibrary.chunk(/cite:(ck_\w+)/.exec(file)![1]!)!
+  const contextOf = async (sessionId: string) => {
+    const text = (await preStep(sessionId))[0]!.content[0]!.text
+    h!.ctx.learnCore.sessions.close(sessionId)
+    return text
+  }
+
+  const onBlock = await open(courseId, { selected: { kind: 'block', id: blockId, quote: { exact: '按水的深度', prefix: '静水压强', suffix: '计算。' }, label: '1.1 静水压强 · 按水的深度…' } })
+  const block = await contextOf(onBlock.sessionId)
+  expect(block).toContain('学习者选中的原句：「按水的深度」')
+  expect(block).toContain('静水压强按水的深度计算。')
+  const exact = [...chunk.text].slice(0, 6).join('')
+  const onChunk = await open(courseId, { page: 'library.sources', selected: { kind: 'chunk', id: chunk.id, quote: { exact, prefix: '', suffix: '' }, label: chunk.citation } })
+  const source = await contextOf(onChunk.sessionId)
+  expect(source).toContain(`学习者选中的原句：「${exact}」`)
+  expect(source).toContain(chunk.text)
+  // Nothing selected inside: the paragraph as a whole.
+  const whole = await open(courseId, { selected: { kind: 'block', id: blockId, label: '1.1 静水压强' } })
+  expect(await contextOf(whole.sessionId)).toContain('选中的教材段落（1.1 静水压强，块')
 })
 
 it('tries the context again on the next turn when it could not be assembled', async () => {

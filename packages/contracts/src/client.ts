@@ -127,7 +127,7 @@ export interface MarkdownProps {
 /**
  * What the annotation unit shows inside the textbook reader (contracts §6.3, docs/annotation/design.md). The
  * reader hosts it without knowing anything about annotations: it passes where it is and the unit draws.
- * - `actions`: the "批注" menu next to "就这段提问", for the paragraph selected now;
+ * - `actions`: the "批注" menu in the bar over the selected text, beside "提问";
  * - `notes`: the notes under one paragraph, and the box to write one.
  */
 export type ReaderNotesProps =

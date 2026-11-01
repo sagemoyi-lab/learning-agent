@@ -220,7 +220,7 @@ it('marks a paragraph still contradicted after the one rewrite in the margin, no
   const wrong = (await paragraphs(course.id, lesson)).find(item => item.text.includes('一定相等'))!
   expect(wrong.text).not.toContain('待核实')
   expect(h!.ctx.learnTextbook.status(lesson.id)).toMatchObject({ unverified: 1 })
-  expect(await h!.endpoint('textbook', 'checks', { lessonId: lesson.id })).toEqual({ [wrong.id]: 'flagged' })
+  expect(await h!.endpoint('textbook', 'flagged', { lessonId: lesson.id })).toEqual([wrong.id])
 
   const info = await h!.endpoint<Info>('textbook', 'blockInfo', { courseId: course.id, blockId: wrong.id })
   expect(info).toMatchObject({ kind: 'explanation', state: 'flagged', note: NOTE, sources: expect.arrayContaining([expect.objectContaining({ citation: expect.stringContaining('《合成长小节》'), text: expect.stringContaining('即使在同一高度也不能认为压强相等') })]) })

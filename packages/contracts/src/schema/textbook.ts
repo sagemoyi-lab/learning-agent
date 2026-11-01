@@ -6,12 +6,10 @@ import { blockId, idOf, instant, relativePath, sessionId } from './common.ts'
  * Textbook Markdown conventions (contracts §3.2):
  * - a block ends with ` ^<blockId>` (Obsidian block reference); tables and display math carry the id
  *   on its own line right after the block;
- * - a citation is a link `[label](cite:<chunkId>)`; content still lacking a source carries
- *   `[待核实](cite:unverified)`.
+ * - a citation is a link `[label](cite:<chunkId>)`. Files written before 10-15 may carry `[待核实](cite:unverified)`;
+ *   it is read, never written (待核实 is kept in the block index).
  */
-export const BLOCK_ID_PATTERN = /(?:^|\s)\^([0-9a-z]{6})\s*$/
 export const CITATION_PATTERN = /\[([^\]]+)\]\(cite:(ck_[0-9A-HJKMNP-TV-Z]{26}|unverified)\)/g
-export const UNVERIFIED_CITATION = 'cite:unverified'
 
 /** Index row for one textbook block. The text itself lives in the Markdown file. Owner: textbook. */
 export const Block = z.object({

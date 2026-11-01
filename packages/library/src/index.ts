@@ -297,7 +297,10 @@ export function apply(ctx: Context, config: Config): void {
     const picked = selection.selected
     if (picked?.kind === 'chunk' && picked.id) {
       const chunk = library.chunk(picked.id)
-      if (chunk) lines.push(`选中的资料片段（${chunk.citation}，${chunk.section.join(' › ')}）：\n${chunk.text}`)
+      if (chunk) {
+        const where = `${chunk.citation}，${chunk.section.join(' › ')}`
+        lines.push(picked.quote ? `学习者选中的原句：「${picked.quote.exact}」\n所在的资料片段（${where}）：\n${chunk.text}` : `选中的资料片段（${where}）：\n${chunk.text}`)
+      }
     }
     return lines
   })
