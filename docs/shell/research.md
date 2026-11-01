@@ -55,3 +55,28 @@
 - **图标栏只显示图标，悬停显示名称**（你说"正常只有图标"）。侧栏打开时，侧栏顶部写着这个功能的名称。
 - **"资料"和"知识模型"的侧栏内容**分别在资料库、知识图谱那两批做；这一批点这两个图标先直接打开页面。
 - **测试进行中锁定主区**仍不在这一批。
+
+## 5. 手机上的布局（11-01）
+
+> 你 11-01 的要求："给项目前端做一个移动端响应式布局的适配"。依据：下面的公开资料、本机 headless Chromium 的触屏模拟（390 像素宽）实测，以及外壳的现有代码。
+
+**现状（390 像素宽、触屏模拟）：** 页面内容大多已经按容器宽度排好（页面骨架、卡片、表单都有 `@container` 规则），问题集中在外壳：
+
+- 图标栏常驻占去 48 像素，主区只剩 342 像素，低于分屏时每栏 360 像素的下限；
+- 标签栏里一个标签不到 100 像素，标题看不出来，右边的"搜索"变成一个空框（窄主区的 `@container` 规则写在 `.la-command` 前面，被后面的宽度盖掉了）；
+- 状态栏的几条文字叠在一起；
+- 右侧栏离左边留着图标栏，不是满屏；从图标栏去别的页面，右侧栏还盖在上面；
+- 讲义里用手指选中文字后不出"提问 / 批注"浮条：浮条靠 `mouseup` 触发，长按选字和拖动选区手柄都不产生 `mouseup`；
+- 按钮 28–32 像素、列表行 28 像素，手指点着吃力；输入框 14 像素，iOS Safari 聚焦时会自动放大页面。
+
+**查到的做法：**
+
+| 问题 | 做法 | 出处 |
+|---|---|---|
+| 多宽算手机 | 宽度小于 600 像素是"紧凑"窗口，用底部导航栏；600–840 用侧边的导航栏（即我们的图标栏） | Android 开发文档 [自适应导航](https://developer.android.com/develop/ui/compose/layouts/adaptive/build-adaptive-navigation)、[窗口大小类别](https://dev.to/tkuenneth/about-window-size-class-libraries-5c5m) |
+| 底部导航放几个 | 二到五个主要去处，更多的放进"更多"或侧边栏 | [SAP Fiori 的 M3 导航栏说明](https://www.sap.com/design-system/fiori-design-android/v26-1/components/m3-standard-components/navigation-bar/usage) |
+| 标签和图标栏怎么放 | Obsidian 手机版没有图标栏，底部导航栏是后退、前进、搜索、标签数（方框里一个数字，点开切换或新建标签）和菜单；图标栏的功能收在菜单里 | [Obsidian 帮助：手机版](https://obsidian.md/help/mobile) |
+| 输入框被放大 | iOS Safari 对小于 16 像素的输入框聚焦时放大页面；输入框始终用 16 像素，不用 `maximum-scale` 禁止缩放（会妨碍需要放大的人） | [Squirrelscan：输入框放大](https://docs.squirrelscan.com/rules/mobile/input-zoom)、[West Wind 的实测](https://weblog.west-wind.com/posts/2023/Apr/17/Preventing-iOS-Textbox-Auto-Zooming-and-ViewPort-Sizing) |
+| 能点的大小 | WCAG 2.2 的最低要求是 24×24 像素（2.5.8），建议 44×44（2.5.5）；Apple 的建议也是 44 点 | WCAG 2.2、Apple 人机界面指南 |
+
+**DSH 页面的 viewport：** DSH 的 `index.html` 已经写了 `width=device-width, initial-scale=1`，手机浏览器按真实宽度排版，不用我们改。
