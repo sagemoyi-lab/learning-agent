@@ -76,7 +76,7 @@
 
 - **服务** `learnTextbook`：`generateLesson`、`generateStage`、`running`、`status`（某课时的状态：未生成、生成中、已生成、失败，进度、段数、待核实段数、连续失败次数、没讲到的知识点、资料里没讲的内容、写好的要点）、`blocks`、`block`、`reviseBlocks`、`revisions`。
 - **表：** `textbook_blocks`（块索引）、`textbook_runs`、`textbook_checks`（每段的内容指纹、结论、原因、出自哪些片段）、`textbook_revisions`。
-- **页面接口** `/api/learning/textbook.<方法>`：`lesson`、`current`、`statuses`、`generate`、`checks`（页边要标的段落）、`blockInfo`（一段的种类、核对状态、原因、引用的原文和网页、最近一次修订原因）、`sourceUses`、`lessonNodes`。生成进度经推送通道的 `learning/textbook-progress` 发给页面。
+- **页面接口** `/api/learning/textbook.<方法>`：`lesson`、`current`、`statuses`、`generate`、`flagged`（页边要标的待核实段落）、`blockInfo`（一段的种类、核对状态、原因、引用的原文和网页、最近一次修订原因）、`sourceUses`、`lessonNodes`。生成进度经推送通道的 `learning/textbook-progress` 发给页面。
 - **事件：** 发 `learning/textbook-ready`、`textbook-failed`（按课时）；听 `learning/stage-changed`（设计书确认后生成本阶段教材）、`learning/doc-changed`（更新块索引）。
 - **模型调用的用途名：** `learning-textbook-plan`（列概念和要点，JSON）、`learning-textbook-concepts`（写本节概念）、`learning-textbook`（写要点、局部修订）、`learning-textbook-check`（核对，JSON，按段）。
 - **老师工具：** `read_lesson_textbook`、`regenerate_textbook`、`revise_textbook`。
