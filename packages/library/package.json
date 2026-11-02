@@ -2,6 +2,7 @@
   "name": "@learning-agent/library",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "library unit: sources, locatable chunks, full-text search with citations; tools search_library, read_section; library page",
   "type": "module",
   "icon": "./icon.svg",

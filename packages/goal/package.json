@@ -2,6 +2,7 @@
   "name": "@learning-agent/goal",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "goal unit: goal statement (goal.md), draft and confirm; tool save_goal_draft; progress-page section",
   "type": "module",
   "icon": "./icon.svg",

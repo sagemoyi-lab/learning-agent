@@ -2,6 +2,7 @@
   "name": "@learning-agent/sidechat",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "sidechat unit: side chat bound to the page selection, isolated from the teacher; summary into notes and evidence; right sidebar",
   "type": "module",
   "icon": "./icon.svg",

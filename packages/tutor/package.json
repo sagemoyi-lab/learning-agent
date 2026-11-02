@@ -2,6 +2,7 @@
   "name": "@learning-agent/tutor",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "tutor unit: teacher sessions per stage, per-turn course brief, lesson records; tool write_lesson_summary; teacher chat page",
   "type": "module",
   "icon": "./icon.svg",

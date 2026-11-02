@@ -2,6 +2,7 @@
   "name": "@learning-agent/planner",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "planner unit: next step per course, tests left open, suggested checks; home page",
   "type": "module",
   "icon": "./icon.svg",

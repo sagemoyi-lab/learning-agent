@@ -2,6 +2,7 @@
   "name": "@learning-agent/settings",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "settings unit: the settings page over DSH's settings, credential, model and plugin services; connection tests",
   "type": "module",
   "icon": "./icon.svg",

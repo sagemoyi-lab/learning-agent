@@ -2,6 +2,7 @@
   "name": "@learning-agent/shell",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "Shell (client): takes over DSH's root slot; activity bar, dockview tabs, the learning.* slots, ctx.learnShell",
   "type": "module",
   "icon": "./icon.svg",

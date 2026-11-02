@@ -2,6 +2,7 @@
   "name": "@learning-agent/kit",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "Shared helpers bundled into each unit: agent tools, one-shot model calls, page data hooks. No state.",
   "type": "module",
   "exports": {

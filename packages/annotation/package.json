@@ -2,6 +2,7 @@
   "name": "@learning-agent/annotation",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "annotation unit: notes on textbook paragraphs and sources (question, my understanding, highlight, error), kept findable when the text changes; questions open side chats, errors become proposals",
   "type": "module",
   "icon": "./icon.svg",

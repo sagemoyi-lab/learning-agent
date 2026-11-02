@@ -2,6 +2,7 @@
   "name": "@learning-agent/learner",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "learner unit: node mastery states derived from the evidence log (skeleton rules)",
   "type": "module",
   "icon": "./icon.svg",

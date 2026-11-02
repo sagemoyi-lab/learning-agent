@@ -2,6 +2,7 @@
   "name": "@learning-agent/app",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "Learning workbench bundle: every learning unit, the tutor and side-chat presets, and DSH's own UI switched off",
   "type": "module",
   "icon": "./icon.svg",

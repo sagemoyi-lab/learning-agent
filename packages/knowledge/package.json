@@ -2,6 +2,7 @@
   "name": "@learning-agent/knowledge",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "knowledge unit: global nodes and typed edges, course graph; tool add_knowledge_nodes; knowledge page",
   "type": "module",
   "icon": "./icon.svg",

@@ -2,6 +2,7 @@
   "name": "@learning-agent/contracts",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "Shared contracts: ids, data shapes, service/event/slot declarations. No business logic.",
   "type": "module",
   "exports": {

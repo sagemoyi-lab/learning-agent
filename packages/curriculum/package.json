@@ -2,6 +2,7 @@
   "name": "@learning-agent/curriculum",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "curriculum unit: roadmap, stages, stage designs, lessons, tasks; tools save_roadmap, save_stage_design, publish_task; progress page",
   "type": "module",
   "icon": "./icon.svg",

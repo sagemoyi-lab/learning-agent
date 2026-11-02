@@ -2,6 +2,7 @@
   "name": "@learning-agent/textbook",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "textbook unit: generates lesson textbooks from cited material, keeps the block index; tools read_lesson_textbook, regenerate_textbook; reader page",
   "type": "module",
   "icon": "./icon.svg",

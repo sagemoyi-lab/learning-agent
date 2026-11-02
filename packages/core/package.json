@@ -2,6 +2,7 @@
   "name": "@learning-agent/core",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "core unit (host): endpoints, change feed; later database, course files, change log, evidence log",
   "type": "module",
   "icon": "./icon.svg",
