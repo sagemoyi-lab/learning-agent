@@ -70,7 +70,7 @@ class LearnCoreService extends Service implements LearnCore {
     this.database.migrate('core', coreMigrations)
     const database = this.database
     this.db = {
-      sqlite: database.sqlite,
+      get sqlite() { return database.sqlite },
       migrate: (unit, steps) => database.migrate(unit, steps),
       transaction: fn => database.transaction(fn),
     }

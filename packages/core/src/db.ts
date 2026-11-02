@@ -14,7 +14,7 @@ export function nullable<T>(value: T | undefined): T | null {
 }
 
 export class Database {
-  readonly sqlite: DatabaseSync
+  sqlite: DatabaseSync
   private depth = 0
   private pending: (() => void)[] = []
   private readonly release: () => void
@@ -75,19 +75,29 @@ export class Database {
       this.depth += 1
       try { return fn() } finally { this.depth -= 1 }
     }
-    this.depth = 1
-    this.sqlite.exec('BEGIN IMMEDIATE')
+    let began = false
     let result: T
     try {
+      this.sqlite.exec('BEGIN IMMEDIATE')
+      began = true
+      this.depth = 1
       result = fn()
       this.sqlite.exec('COMMIT')
     } catch (error) {
-      this.sqlite.exec('ROLLBACK')
+      if (began) {
+        try { this.sqlite.exec('ROLLBACK') } catch {
+          // Do not reuse a connection with unknown transaction state.
+          try { this.sqlite.close() } finally {
+            this.sqlite = new DatabaseSync(this.file)
+            this.sqlite.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;')
+          }
+        }
+      }
       this.pending = []
-      this.depth = 0
       throw error
+    } finally {
+      this.depth = 0
     }
-    this.depth = 0
     const pending = this.pending
     this.pending = []
     for (const run of pending) run()
