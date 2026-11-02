@@ -44,23 +44,33 @@ export class MineruParser {
 
   private async request(path: string | URL, init: RequestInit & { timeoutMs?: number } = {}, signal?: AbortSignal): Promise<Response> {
     const { timeoutMs, ...rest } = init
-    const url = path instanceof URL ? path : this.endpoint(path)
-    const own = url.origin === this.url.origin
-    const headers = new Headers(rest.headers)
-    if (own && this.apiKey) headers.set('Authorization', `Bearer ${this.apiKey}`)
+    let url = path instanceof URL ? path : this.endpoint(path)
+    let options: RequestInit = rest
     const timeout = AbortSignal.timeout(timeoutMs ?? 120_000)
+    const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout
+    const seen = new Set<string>()
     let response: Response
-    try {
-      response = await fetch(url, { ...rest, headers, redirect: 'manual', signal: signal ? AbortSignal.any([signal, timeout]) : timeout })
-    } catch (error) {
-      if (signal?.aborted) throw error
-      throw new ParserUnavailable(this.cloud ? '连接 MinerU 云端失败，请检查网络后重试；原 PDF 已保存' : '本地解析服务无法连接，请启动 MinerU 后重试；原 PDF 已保存')
-    }
-    // Result files may redirect to object storage; follow once, never forwarding the key.
-    if (response.status >= 300 && response.status < 400 && response.headers.get('location')) {
+    for (let hop = 0; ; hop++) {
+      requestSignal.throwIfAborted()
+      if (seen.has(url.href)) throw new ParserUnavailable('解析请求跳转形成循环')
+      seen.add(url.href)
+      const headers = new Headers(options.headers)
+      if (url.origin === this.url.origin && this.apiKey) headers.set('Authorization', `Bearer ${this.apiKey}`)
+      else { headers.delete('Authorization'); headers.delete('Cookie') }
+      try {
+        response = await fetch(url, { ...options, headers, redirect: 'manual', signal: requestSignal })
+      } catch (error) {
+        if (requestSignal.aborted) throw error
+        throw new ParserUnavailable(this.cloud ? '连接 MinerU 云端失败，请检查网络后重试；原 PDF 已保存' : '本地解析服务无法连接，请启动 MinerU 后重试；原 PDF 已保存')
+      }
+      if (![301, 302, 303, 307, 308].includes(response.status) || !response.headers.get('location')) break
+      if (hop >= 5) throw new ParserUnavailable('解析请求跳转超过 5 次')
       const target = new URL(response.headers.get('location')!, url)
-      if (target.protocol !== 'https:' && target.origin !== this.url.origin) throw new Error('解析服务给出了不安全的下载地址')
-      return this.request(target, { method: 'GET', ...(timeoutMs ? { timeoutMs } : {}) }, signal)
+      if (target.username || target.password || (target.protocol !== 'https:' && target.origin !== this.url.origin)) throw new Error('解析服务给出了不安全的下载地址')
+      await response.body?.cancel()
+      if (response.status === 303 || ([301, 302].includes(response.status) && options.method === 'POST')) options = { method: 'GET' }
+      else if (target.origin !== url.origin) options = { ...options, headers: {} }
+      url = target
     }
     if (response.status === 404 && url.pathname.includes('/v1/parse/jobs/')) throw new ParserMissingJob('解析器已重启，正在用原件重新提交')
     if (response.status === 401 || response.status === 403) throw new Error('MinerU 云端拒绝了密钥，请在 设置 › 资料服务 里检查 MinerU 密钥')
