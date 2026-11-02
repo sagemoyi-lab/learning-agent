@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { FeedMessage, Selection } from '@learning-agent/contracts'
 import type { LearnShell, SecretState, SettingsAccess, ShellScope } from '@learning-agent/contracts/client'
+import { feedMatches } from './feed-match.ts'
 
 export interface Loaded<T> {
   readonly data: T | undefined
@@ -44,9 +45,8 @@ export function useLoad<T>(
   const refreshKey = refreshOn.join('|')
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
-    const prefixes = refreshKey.split('|')
     const dispose = shell.onFeed((message: FeedMessage) => {
-      if (!prefixes.some(prefix => message.type.startsWith(prefix))) return
+      if (!feedMatches(message.type, refreshKey)) return
       if (!shown.current) {
         stale.current = true
         return

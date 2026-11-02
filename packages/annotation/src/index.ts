@@ -234,6 +234,10 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
       let annotation = Annotation.parse(JSON.parse(row.data))
       // Recomputed on every read, kept quietly (an event here would make every open page reload again).
       const location = await this.place(annotation)
+      // Awaiting placement may race with edits, hiding, resolution or a linked side chat.
+      const latest = this.read(annotation.id)
+      if (!latest) continue
+      annotation = latest
       if (!sameLocation(annotation.location, location)) {
         annotation = { ...annotation, location }
         this.save(annotation)
@@ -405,19 +409,25 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
     }
     const block = must(await this.ctx.learnTextbook.block(annotation.courseId, location.blockId), 'annotation', '讲义段落', location.blockId)
     const quote = annotation.anchor.quote?.exact
+    let createdNow = false
     const proposal = core.db.transaction(() => {
+      const current = must(this.read(annotationId), 'annotation', '批注', annotationId)
+      if (current.proposalId) return must(core.proposals.get(current.proposalId), 'annotation', '提案', current.proposalId)
       const created = core.proposals.create({
         courseId: annotation.courseId,
         source: 'annotation',
         targets: [{ kind: 'file', courseId: annotation.courseId, path: block.file }],
         summary: `讲义报错：${brief(quote ?? plainText(block.text), 30)}`,
-        rationale: [`学习者说：${annotation.text}`, quote ? `段落 ^${block.id} 里选中的原句：「${quote}」` : `针对整段 ^${block.id}`].join('\n'),
+        rationale: [`学习者说：${current.text}`, quote ? `段落 ^${block.id} 里选中的原句：「${quote}」` : `针对整段 ^${block.id}`].join('\n'),
       })
-      this.save({ ...annotation, proposalId: created.id, updatedAt: now(), location })
+      this.save({ ...current, proposalId: created.id, updatedAt: now(), location })
+      createdNow = true
       return created
     })
-    this.changed(annotation)
-    this.ctx.emit('learning/handoff', { courseId: annotation.courseId, unit: 'annotation', text: `学习者在讲义上报了一处错误，已生成修改提案：${proposal.summary}。` })
+    if (createdNow) {
+      this.changed(annotation)
+      this.ctx.emit('learning/handoff', { courseId: annotation.courseId, unit: 'annotation', text: `学习者在讲义上报了一处错误，已生成修改提案：${proposal.summary}。` })
+    }
     return proposal
   }
 }

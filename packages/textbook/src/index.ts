@@ -476,11 +476,11 @@ class LearnTextbookService extends Service implements LearnTextbook {
    * A paragraph as the learner edits it in the reader: its Markdown with citations as short markers (`〔p.12〕`), or
    * why it cannot be edited there.
    */
-  async blockSource(courseId: string, blockId: string): Promise<{ readonly text: string } | { readonly refused: string }> {
+  async blockSource(courseId: string, blockId: string): Promise<{ readonly text: string; readonly hash: string } | { readonly refused: string }> {
     const block = await this.block(courseId, blockId)
     if (!block) return { refused: '找不到这一段，可能刚改过，刷新后再试' }
     if (block.original) return { refused: '这是原书原文，原样引用，不能改；可以在旁边批注' }
-    return { text: block.text.replace(LINK, (_, label: string) => markerOf(label)) }
+    return { text: block.text.replace(LINK, (_, label: string) => markerOf(label)), hash: block.hash }
   }
 
   /**
@@ -489,10 +489,11 @@ class LearnTextbookService extends Service implements LearnTextbook {
    * (a marker the paragraph did not have is dropped); source text copied in cannot be edited. The program does not
    * check what the learner wrote.
    */
-  async editBlock(courseId: string, blockId: string, input: string): Promise<{ readonly blocks: readonly string[] }> {
+  async editBlock(courseId: string, blockId: string, input: string, expectedHash: string): Promise<{ readonly blocks: readonly string[] }> {
     const block = await this.block(courseId, blockId)
     if (!block) throw new LearningApiError('learning/textbook/no-block', '找不到这一段，可能刚改过，刷新后再试')
     if (block.original) throw new LearningApiError('learning/textbook/original', '这是原书原文，原样引用，不能改；可以在旁边批注')
+    if (block.hash !== expectedHash) throw new LearningApiError('learning/textbook/conflict', '这段刚被修改过，你的输入已保留；请重新读取后合并', { current: block.text, submitted: input })
     const lessons = this.lessonsOf(courseId, block.file)
     const stage = lessons[0] ? this.ctx.learnCurriculum.stage(lessons[0].stageId) : undefined
     if (stage && this.writing(stage.id)) throw new LearningApiError('learning/textbook/busy', '讲义正在生成，等生成完再改')
@@ -1390,8 +1391,8 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => endpoint({
     unit: 'textbook',
     method: 'editBlock',
-    input: z.object({ courseId: z.string(), blockId: z.string(), text: z.string().max(20_000) }),
-    handle: ({ courseId, blockId, text }) => textbook.editBlock(courseId, blockId, text),
+    input: z.object({ courseId: z.string(), blockId: z.string(), text: z.string().max(20_000), hash: z.string().min(1) }),
+    handle: ({ courseId, blockId, text, hash }) => textbook.editBlock(courseId, blockId, text, hash),
   }), 'textbook: edit block')
 
   ctx.effect(() => endpoint({

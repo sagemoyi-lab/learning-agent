@@ -123,8 +123,8 @@ export function locateQuote(text: string, quote: TextQuote): Located {
     const start = at[0]!
     const end = start + exact.length
     // The text right next to the quote must be what it was: "能忽略" inside a new "不能忽略" is another claim.
-    const leftChanged = prefix !== '' && before(start).at(-1) !== prefix.at(-1)
-    const rightChanged = suffix !== '' && after(end)[0] !== suffix[0]
+    const leftChanged = prefix !== '' ? before(start).at(-1) !== prefix.at(-1) : /^[不非无未否]/.test(before(start).slice(-1))
+    const rightChanged = suffix !== '' ? after(end)[0] !== suffix[0] : /^(?:但|除|若|当|在|且|仅)/.test(after(end))
     if (!leftChanged && !rightChanged) return { status: 'anchored', start, end }
     return {
       status: 'needs-confirmation',

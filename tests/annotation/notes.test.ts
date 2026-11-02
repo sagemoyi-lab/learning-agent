@@ -1,7 +1,7 @@
 // annotation (docs/annotation/design.md): notes that stay findable when the text changes, and what each kind does next.
 // Real units on a synthetic textbook file; DSH's transport, sessions and the model are fakes (tests/harness.ts).
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Annotation, Id, Proposal } from '@learning-agent/contracts'
 import { ACTIVE_CHAT_REFRESH_ON } from '../../packages/sidechat/src/refresh.ts'
 import { FIXTURES, createHarness, type Harness } from '../harness.ts'
@@ -27,7 +27,7 @@ beforeEach(async () => {
   courseId = (await h.endpoint('core', 'createCourse', { title: '批注测试（合成资料）' })).id
   await write(TEXT)
 })
-afterEach(() => h.dispose())
+afterEach(() => { vi.restoreAllMocks(); h.dispose() })
 
 /** Write the textbook file and wait for the block index to follow. */
 async function write(texts: Record<string, string>) {
@@ -50,6 +50,36 @@ function link(blockId: string, nodeIds: string[]) {
 const describe = async (sessionId: string) =>
   (await h.ctx.waterfall('learning/describe-selection', h.ctx.learnCore.sessions.get(sessionId)!.openedFrom!, async () => [] as string[])).join('\n\n')
 const NODE = 'kn_01J0000000000000000000000A'
+
+it('placement reads retain edits and hidden status made while a paragraph lookup is pending', async () => {
+  const note = await create({ type: 'highlight', anchor: anchor(A, '静水压强也加倍', '水深加倍时，', '。') })
+  await write({ ...TEXT, [A]: `新增说明。${TEXT[A]}` })
+  const original = h.ctx.learnTextbook.block.bind(h.ctx.learnTextbook)
+  let release!: () => void
+  const barrier = new Promise<void>(resolve => { release = resolve })
+  let entered!: () => void
+  const started = new Promise<void>(resolve => { entered = resolve })
+  const spy = vi.spyOn(h.ctx.learnTextbook, 'block').mockImplementation(async (...args) => { entered(); await barrier; return original(...args) })
+  const reading = list({ includeHidden: true })
+  await started
+  await h.endpoint('annotation', 'edit', { annotationId: note.id, text: '并发保存的新批注' })
+  await h.endpoint('annotation', 'hide', { annotationId: note.id, hidden: true })
+  release()
+  const notes = await reading
+  spy.mockRestore()
+  expect(notes.find(item => item.id === note.id)).toMatchObject({ text: '并发保存的新批注', hiddenAt: expect.any(String) })
+})
+
+it('concurrent error submissions produce one proposal and one handoff', async () => {
+  const note = await create({ type: 'error', anchor: anchor(A, '静水压强也加倍', '水深加倍时，', '。'), text: '合成报错' })
+  // Reset only the fixture link so concurrent calls exercise proposal creation rather than reuse.
+  h.ctx.learnCore.db.sqlite.prepare("UPDATE annotation_annotations SET data=json_remove(data, '$.proposalId') WHERE id=?").run(note.id)
+  let handoffs = 0
+  h.ctx.on('learning/handoff', event => { if (event.unit === 'annotation') handoffs++ })
+  const replies = await Promise.all(Array.from({ length: 10 }, () => h.endpoint<Proposal>('annotation', 'submitError', { annotationId: note.id })))
+  expect(new Set(replies.map(reply => reply.id)).size).toBe(1)
+  expect(handoffs).toBe(1)
+})
 
 it('keeps the quote and the paragraph as the learner saw them, once per request', async () => {
   const input = { type: 'highlight', anchor: anchor(A, '静水压强也加倍', '水深加倍时，', '。'), requestId: 'req-1' }

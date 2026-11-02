@@ -89,7 +89,8 @@ export function bareTex(text: string): string {
     .replace(/\\(?:mathrm|text|rm|mathbf|operatorname|boldsymbol)\{([^}]*)\}/g, '$1')
     .replace(/\\(?:left|right|displaystyle|,|;|!|quad|qquad)/g, '')
     .replace(/\\dfrac|\\tfrac/g, '\\frac')
-    .replace(/[$^_{}~]/g, '')
+    .replace(/([_^])\{([^{}])\}/g, '$1$2')
+    .replace(/[$~]/g, '')
 }
 
 /** Formulas a paragraph states (inline or display math with `=` or an inequality), as written. */

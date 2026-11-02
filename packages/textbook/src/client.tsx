@@ -97,15 +97,17 @@ function InfoCard({ courseId, blockId, onSource }: { courseId: string; blockId: 
 
 /** One paragraph in place as the learner edits it: its text with citations as short markers, saved back into the handout. */
 function BlockEditor({ courseId, blockId, onDone }: { courseId: string; blockId: string; onDone(): void }): ReactNode {
-  const source = useLoad(shell, () => shell.call<{ text: string } | { refused: string }>('textbook', 'blockSource', { courseId, blockId }), [courseId, blockId], [])
+  const source = useLoad(shell, () => shell.call<{ text: string; hash: string } | { refused: string }>('textbook', 'blockSource', { courseId, blockId }), [courseId, blockId], [])
   const [text, setText] = useState<string>()
   const save = useAction()
   const loaded = source.data && 'text' in source.data ? source.data.text : undefined
   useEffect(() => { if (loaded !== undefined) setText(loaded) }, [loaded])
   if (source.error) return <div className="la-block-editor"><ErrorText error={source.error} /><div className="la-block-editor-actions"><Button size="sm" variant="quiet" onClick={onDone}>关闭</Button></div></div>
-  if (!source.data || text === undefined) return <div className="la-block-editor"><Skeleton lines={3} /></div>
+  if (!source.data) return <div className="la-block-editor"><Skeleton lines={3} /></div>
   if ('refused' in source.data) return <div className="la-block-editor"><Callout tone="neutral" icon={Info} title="这一段不能改" actions={<Button size="sm" variant="quiet" onClick={onDone}>知道了</Button>}>{source.data.refused}</Callout></div>
-  const store = () => void save.run(async () => { await shell.call('textbook', 'editBlock', { courseId, blockId, text }); onDone() })
+  if (text === undefined) return <div className="la-block-editor"><Skeleton lines={3} /></div>
+  const hash = source.data.hash
+  const store = () => void save.run(async () => { await shell.call('textbook', 'editBlock', { courseId, blockId, text, hash }); onDone() })
   return (
     <div className="la-block-editor" onKeyDown={event => { if (event.key === 'Escape') onDone() }}>
       <TextArea value={text} onChange={setText} minRows={3} maxRows={16} autoFocus aria-label="修改这一段" />

@@ -166,10 +166,12 @@ it('lets the learner edit a paragraph in place, unchecked, and says a regenerati
   const unit = await blockOf(course!, '压强的单位是帕斯卡')
 
   // Its citations as short markers; the same page of two chunks, one marker each.
-  expect(await h.endpoint('textbook', 'blockSource', { courseId, blockId: unit.id })).toEqual({ text: '压强的单位是帕斯卡。〔p.1〕〔p.1〕' })
+  expect(await h.endpoint('textbook', 'blockSource', { courseId, blockId: unit.id })).toEqual({ text: '压强的单位是帕斯卡。〔p.1〕〔p.1〕', hash: unit.hash })
   // A new marker is not a source; a number the material lacks is the learner's to write.
-  const edited = await h.endpoint('textbook', 'editBlock', { courseId, blockId: unit.id, text: '我的笔记：1 Pa 等于 1 N/m²，998 只是举例。〔p.1〕〔p.9〕' })
+  const edited = await h.endpoint('textbook', 'editBlock', { courseId, blockId: unit.id, hash: unit.hash, text: '我的笔记：1 Pa 等于 1 N/m²，998 只是举例。〔p.1〕〔p.9〕' })
   expect(edited).toEqual({ blocks: [unit.id] })
+  const staleSave = await h.call('textbook', 'editBlock', { courseId, blockId: unit.id, hash: unit.hash, text: '旧编辑框试图覆盖新笔记' })
+  expect(staleSave.error?.code).toBe('learning/textbook/conflict')
   const now = await blockOf(course!, '我的笔记')
   expect(now.id).toBe(unit.id)
   expect(now.text).toBe(`我的笔记：1 Pa 等于 1 N/m²，998 只是举例。[《合成长小节》p.1](cite:${unit.citations[0]})`)
@@ -182,19 +184,20 @@ it('lets the learner edit a paragraph in place, unchecked, and says a regenerati
   expect(h.ctx.learnTextbook.status(lessons[0]!.id)).toMatchObject({ state: 'ready', unverified: 0, edited: 1 })
 
   // Two paragraphs: the second gets a new id in the same section; an empty one is removed.
-  const split = await h.endpoint<{ blocks: string[] }>('textbook', 'editBlock', { courseId, blockId: unit.id, text: '第一行笔记。\n\n第二行笔记。' })
+  const split = await h.endpoint<{ blocks: string[] }>('textbook', 'editBlock', { courseId, blockId: unit.id, hash: now.hash, text: '第一行笔记。\n\n第二行笔记。' })
   expect(split.blocks).toHaveLength(2)
   expect(split.blocks[0]).toBe(unit.id)
   expect(h.ctx.learnTextbook.blocks(courseId).find(block => block.id === split.blocks[1])!.lessonId).toBe(lessons[0]!.id)
   expect(h.ctx.learnTextbook.status(lessons[0]!.id)).toMatchObject({ edited: 2 })
-  expect(await h.endpoint('textbook', 'editBlock', { courseId, blockId: split.blocks[1], text: '  ' })).toEqual({ blocks: [] })
+  const second = await h.endpoint<{ hash: string }>('textbook', 'blockSource', { courseId, blockId: split.blocks[1] })
+  expect(await h.endpoint('textbook', 'editBlock', { courseId, blockId: split.blocks[1], hash: second.hash, text: '  ' })).toEqual({ blocks: [] })
   expect(await handoutText(course!)).not.toContain('第二行笔记')
   expect(h.ctx.learnTextbook.revisions(courseId, split.blocks[1]!).at(-1)).toMatchObject({ into: [], reason: '学习者在讲义页修改' })
 
   // Source text cannot be edited.
   const original = (await paragraphs(course!)).find(item => item.original)!
   expect(await h.endpoint('textbook', 'blockSource', { courseId, blockId: original.id })).toEqual({ refused: expect.stringContaining('原书原文') })
-  expect((await h.call('textbook', 'editBlock', { courseId, blockId: original.id, text: '改原文' })).error?.code).toBe('learning/textbook/original')
+  expect((await h.call('textbook', 'editBlock', { courseId, blockId: original.id, hash: 'irrelevant', text: '改原文' })).error?.code).toBe('learning/textbook/original')
 
   // Written again: the learner's paragraph is replaced, and recorded as such.
   expect(await again(course!)).toBe('ready')
