@@ -1,4 +1,5 @@
-// The minimal learning flow (docs/PLAN.md, development route) across the real host units, on a synthetic chapter.
+// The minimal learning flow across the real host units, on a synthetic chapter: from creating a course to a
+// side chat's summary, step by step below. AGENTS.md requires it to pass at every commit.
 // DSH's transport, sessions, agents and the model are fakes (tests/harness.ts); every unit's
 // service, endpoint, table, course file and event is real. Also checks the hand-back: what the
 // learner finishes on a page reaches the teacher, who carries on when the next step is the teacher's.
