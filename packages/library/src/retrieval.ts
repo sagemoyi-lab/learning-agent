@@ -41,6 +41,8 @@ export class LibraryIndex {
   private readonly queue: string[] = []
   private readonly failures = new Map<string, string>()
   private readonly controller = new AbortController()
+  private taskController?: AbortController
+  private epoch = 0
   private active?: string
   private working = false
   private readonly embedderNow: () => Promise<Embedder | undefined>
@@ -71,7 +73,11 @@ export class LibraryIndex {
 
   /** Re-read the embedder; with one available, index whatever lacks a vector for its model. */
   async refresh(): Promise<Embedder | undefined> {
+    const mine = ++this.epoch
+    this.taskController?.abort()
+    this.queue.length = 0
     const next = await this.embedderNow()
+    if (mine !== this.epoch || this.controller.signal.aborted) return this.embedder
     if (next?.model !== this.embedder?.model) this.cache.clear()
     this.embedder = next
     if (next) this.resume()
@@ -101,7 +107,7 @@ export class LibraryIndex {
     for (const source of this.store.sources()) if (this.state(source.id).state !== 'ready') this.schedule(source.id)
   }
 
-  dispose(): void { this.controller.abort() }
+  dispose(): void { this.controller.abort(); this.taskController?.abort() }
 
   private changed(sourceId: string): void {
     this.cache.delete(sourceId)
@@ -116,26 +122,36 @@ export class LibraryIndex {
         const embedder = this.embedder
         if (!embedder) break // Semantic search was switched off; refresh() emptied the queue.
         const sourceId = this.queue.shift()!
+        const epoch = this.epoch
+        const task = new AbortController()
+        this.taskController = task
         this.active = sourceId
         this.changed(sourceId)
-        try { await this.indexSource(sourceId, embedder) } catch (error) {
+        try { await this.indexSource(sourceId, embedder, task.signal, epoch) } catch (error) {
           if (this.controller.signal.aborted) return
-          this.failures.set(sourceId, error instanceof Error ? error.message : '建立语义索引失败')
+          if (!task.signal.aborted && epoch === this.epoch) this.failures.set(sourceId, error instanceof Error ? error.message : '建立语义索引失败')
         }
+        this.taskController = undefined
         this.active = undefined
+        if (epoch !== this.epoch && this.embedder && !this.queue.includes(sourceId)) this.queue.unshift(sourceId)
         this.changed(sourceId)
       }
     } finally { this.working = false; this.active = undefined }
   }
 
-  private async indexSource(sourceId: string, embedder: Embedder): Promise<void> {
+  private async indexSource(sourceId: string, embedder: Embedder, taskSignal: AbortSignal, epoch: number): Promise<void> {
+    const deadline = AbortSignal.timeout(30 * 60_000)
     const missing = this.sqlite.prepare(`SELECT c.id, c.section, c.text FROM library_chunks c WHERE c.source_id = ?
       AND NOT EXISTS (SELECT 1 FROM library_vectors v WHERE v.chunk_id = c.id AND v.model = ?) ORDER BY c.seq LIMIT ${INDEX_BATCH}`)
     const insert = this.sqlite.prepare('INSERT OR REPLACE INTO library_vectors (chunk_id, model, vector) VALUES (?, ?, ?)')
     for (;;) {
+      taskSignal.throwIfAborted()
+      if (epoch !== this.epoch) return
       const rows = missing.all(sourceId, embedder.model) as unknown as { id: string; section: string; text: string }[]
       if (rows.length === 0) return
-      const vectors = await embedder.embed(rows.map(documentText), 'document', this.controller.signal)
+      const vectors = await embedder.embed(rows.map(documentText), 'document', AbortSignal.any([this.controller.signal, taskSignal, deadline]))
+      taskSignal.throwIfAborted()
+      if (epoch !== this.epoch) return
       this.transaction(() => rows.forEach((row, i) => insert.run(row.id, embedder.model, blob(normalize(vectors[i]!)))))
       this.changed(sourceId)
     }

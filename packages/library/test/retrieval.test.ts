@@ -137,4 +137,28 @@ describe('hybrid retrieval', () => {
   it('fuses ranked lists by reciprocal rank', () => {
     expect(rrf(['a', 'b', 'c'], ['c', 'a'])).toEqual(['a', 'c', 'b'])
   })
+
+  it('aborts in-flight indexing when disabled and ignores a late response from the old task', async () => {
+    let started!: () => void, release!: () => void
+    const entered = new Promise<void>(resolve => { started = resolve })
+    const barrier = new Promise<void>(resolve => { release = resolve })
+    let signal: AbortSignal | undefined
+    const slow: Embedder = {
+      model: 'slow@512', dims: 512,
+      async embed(texts, _type, requestSignal) { signal = requestSignal; started(); await barrier; return texts.map(() => new Float32Array(512).fill(1)) },
+      rerank: async () => [],
+    }
+    let chosen: Embedder | undefined = slow
+    const live = new LibraryIndex(ctx, store, db.sqlite, fn => db.transaction(fn), async () => chosen)
+    await live.refresh()
+    await entered
+    chosen = undefined
+    await live.refresh()
+    expect(signal?.aborted).toBe(true)
+    release()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(db.sqlite.prepare("SELECT count(*) AS n FROM library_vectors WHERE model='slow@512'").get()).toEqual({ n: 0 })
+    expect(live.state(sourceId).state).toBe('off')
+    live.dispose()
+  })
 })

@@ -50,6 +50,7 @@ export class Voyage implements Embedder {
   async embed(texts: readonly string[], inputType: 'query' | 'document', signal?: AbortSignal): Promise<Float32Array[]> {
     const vectors: Float32Array[] = []
     for (const batch of batches(texts)) {
+      signal?.throwIfAborted()
       const body = await this.post<{ data: { index: number; embedding: number[] }[] }>('/embeddings', { model: this.embedModel, input: batch, input_type: inputType, output_dimension: this.dims }, signal)
       const ordered = [...body.data].sort((a, b) => a.index - b.index)
       if (ordered.length !== batch.length || ordered.some(item => item.embedding.length !== this.dims)) throw new EmbeddingUnavailable('Voyage AI 返回的向量数量或维度不符')
