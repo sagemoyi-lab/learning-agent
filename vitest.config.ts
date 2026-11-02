@@ -7,7 +7,7 @@ const DSH = resolve(import.meta.dirname, '.tools/dsh/node_modules/@deepseek-ai')
 export default defineConfig({
   resolve: {
     alias: [
-      { find: /^@deepseek-ai\/(cordis|dsh-llm|dsh-tools)$/, replacement: `${DSH}/$1/lib/index.js` },
+      { find: /^@deepseek-ai\/(cordis|dsh-llm|dsh-tools|dsh-session|dsh-session-persistence-jsonl)$/, replacement: `${DSH}/$1/lib/index.js` },
       { find: /^@deepseek-ai\/schemastery$/, replacement: `${DSH}/schemastery/lib/index.mjs` },
     ],
   },

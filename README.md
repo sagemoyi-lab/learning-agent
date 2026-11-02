@@ -61,6 +61,8 @@ sh scripts/dev-profile.sh   # 安装 learning profile（已有的不覆盖），
 
 ## 设置和在线服务
 
+学习数据的备份、校验恢复和切换学习库，见 [开发说明](docs/development.md#备份和恢复)。
+
 侧栏左下角的齿轮打开设置页（见 [settings](docs/settings/design.md)）。在线服务的密钥可以在设置页填，也可以写进 `.env`；各服务的密钥名、做什么、会发出去什么，见 [library](docs/library/design.md)"在线服务"和"数据与接口"。MinerU 的密钥在 mineru.net 的 API 管理页申请。
 
 PDF 默认用 MinerU 云端解析。要在本机解析（设置 › 资料服务 › 解析方式选本机），先准备好 `.tools/mineru` 里的 MinerU 4.0.10 和下载好的模型，再在仓库根目录的 PowerShell 运行：

@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Personal learning workbench built as DSH (cordis) plugins",
   "scripts": {
+    "backup": "node scripts/backup.ts backup",
+    "restore": "node scripts/backup.ts restore",
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.host.json && tsc -p tsconfig.client.json",
     "test": "vitest run",

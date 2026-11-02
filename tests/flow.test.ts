@@ -4,15 +4,19 @@
 // service, endpoint, table, course file and event is real. Also checks the hand-back: what the
 // learner finishes on a page reaches the teacher, who carries on when the next step is the teacher's.
 import { join } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import type { Id } from '@learning-agent/contracts'
 import { FIXTURES, createHarness, textbookSettled, type Harness } from './harness.ts'
+import { createBackup, restoreBackup } from '../packages/core/src/backup.ts'
 
 const FIXTURE = join(FIXTURES, 'synthetic-chapter')
 
 let h: Harness
 let nodeId = ''
 let citation = ''
+let restoreTemp: string | undefined
 
 beforeAll(() => {
   h = createHarness(call => {
@@ -25,7 +29,10 @@ beforeAll(() => {
   })
 })
 
-afterAll(() => h.dispose())
+afterAll(() => {
+  h.dispose()
+  if (restoreTemp) rmSync(restoreTemp, { recursive: true, force: true })
+})
 
 /** The last notice the teacher got, after queued handoffs ran. */
 async function lastNotice() {
@@ -152,4 +159,31 @@ it('runs the minimal learning flow', async () => {
   const brief = await ctx.learnTutor.brief(course.id, teacher)
   expect(brief.indexOf('## 下一步')).toBeGreaterThan(0)
   expect(brief.indexOf('## 下一步')).toBeLessThan(brief.indexOf('## 目标说明'))
+
+  // Exercise a full learning-library restore, not only independent file copies.
+  const snapshotRoot = mkdtempSync(join(tmpdir(), 'learning-flow-restore-'))
+  restoreTemp = snapshotRoot
+  const originalRoot = h.root
+  const stateBefore = ctx.learnLearner.states([nodeId])
+  const logBefore = ctx.learnCore.log.count()
+  const goalBefore = await ctx.learnGoal.get(course.id)
+  const textbookBefore = await ctx.learnCore.files.read(course.id, lesson.textbookFile!)
+  h.dispose(true)
+  try {
+    createBackup({ learningHome: originalRoot, target: join(snapshotRoot, 'backup'), commit: 'synthetic-flow' })
+    restoreBackup(join(snapshotRoot, 'backup'), join(snapshotRoot, 'restored'))
+    h = createHarness(() => { throw new Error('Restoration must not need a model call') }, {}, { root: join(snapshotRoot, 'restored') })
+    await h.settle()
+    expect(h.ctx.learnLearner.states([nodeId])).toEqual(stateBefore)
+    expect(h.ctx.learnCore.log.count()).toBe(logBefore)
+    expect(await h.ctx.learnGoal.get(course.id)).toEqual(goalBefore)
+    expect((await h.ctx.learnCore.files.read(course.id, lesson.textbookFile!))?.text).toBe(textbookBefore?.text)
+    expect((await h.ctx.learnCore.files.read(course.id, 'notes/side-chats.md'))?.text).toContain('水深加倍')
+    expect(h.ctx.learnCurriculum.lesson(lesson.id)?.status).toBe('done')
+    expect(h.ctx.learnCore.sessions.get(side.sessionId)?.closedAt).toBeTruthy()
+    expect(h.ctx.learnCore.log.query({ courseId: course.id, types: ['attempt.graded'] })).toHaveLength(5)
+  } finally {
+    rmSync(originalRoot, { recursive: true, force: true })
+    // The restored service is closed by afterAll before removing its data root.
+  }
 })

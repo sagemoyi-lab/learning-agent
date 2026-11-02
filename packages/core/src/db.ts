@@ -2,9 +2,11 @@
 // Each unit owns tables prefixed with its own name and brings them up to date with `migrate`.
 // Events must only fire after the data is durable, so post-commit work queues on `afterCommit`.
 import { mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import type { Migration } from '@learning-agent/contracts'
+import { acquireLease } from './lease.ts'
 
 /** SQLite cannot bind `undefined`; store it as NULL. */
 export function nullable<T>(value: T | undefined): T | null {
@@ -15,17 +17,26 @@ export class Database {
   readonly sqlite: DatabaseSync
   private depth = 0
   private pending: (() => void)[] = []
+  private readonly release: () => void
+  private readonly file: string
 
   constructor(file: string) {
+    this.file = file
     mkdirSync(dirname(file), { recursive: true })
-    this.sqlite = new DatabaseSync(file)
-    this.sqlite.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;')
-    this.sqlite.exec(`CREATE TABLE IF NOT EXISTS core_migrations (
-      unit TEXT NOT NULL,
-      version INTEGER NOT NULL,
-      applied_at TEXT NOT NULL,
-      PRIMARY KEY (unit, version)
-    )`)
+    this.release = acquireLease(`${file}.run-lock`)
+    try {
+      this.sqlite = new DatabaseSync(file)
+      this.sqlite.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;')
+      this.sqlite.exec(`CREATE TABLE IF NOT EXISTS core_migrations (
+        unit TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        applied_at TEXT NOT NULL,
+        PRIMARY KEY (unit, version)
+      )`)
+    } catch (error) {
+      this.release()
+      throw error
+    }
   }
 
   migrate(unit: string, steps: readonly Migration[]): void {
@@ -36,13 +47,25 @@ export class Database {
     ordered.forEach((step, index) => {
       if (step.version !== index + 1) throw new Error(`learning-core: ${unit} migrations must be numbered 1, 2, 3 … (got ${step.version})`)
     })
-    for (const step of ordered) {
-      if (step.version <= current) continue
-      this.transaction(() => {
-        this.sqlite.exec(step.sql)
-        this.sqlite.prepare('INSERT INTO core_migrations (unit, version, applied_at) VALUES (?, ?, ?)')
-          .run(unit, step.version, new Date().toISOString())
-      })
+    if (current > ordered.length) throw new Error(`学习库是新版本程序写的：${unit} 数据版本 ${current}，程序只认识 ${ordered.length}`)
+    let snapshot: string | undefined
+    if (current < ordered.length) {
+      const folder = join(dirname(this.file), 'migration-backups')
+      mkdirSync(folder, { recursive: true })
+      snapshot = join(folder, `${unit}-${current}-${randomUUID()}.db`)
+      this.sqlite.prepare('VACUUM INTO ?').run(snapshot)
+    }
+    try {
+      for (const step of ordered) {
+        if (step.version <= current) continue
+        this.transaction(() => {
+          this.sqlite.exec(step.sql)
+          this.sqlite.prepare('INSERT INTO core_migrations (unit, version, applied_at) VALUES (?, ?, ?)')
+            .run(unit, step.version, new Date().toISOString())
+        })
+      }
+    } catch (error) {
+      throw new Error(`learning-core: ${unit} 迁移失败；迁移前备份：${snapshot}`, { cause: error })
     }
   }
 
@@ -78,6 +101,6 @@ export class Database {
   }
 
   close(): void {
-    this.sqlite.close()
+    try { this.sqlite.close() } finally { this.release() }
   }
 }

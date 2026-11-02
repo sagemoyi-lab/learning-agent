@@ -221,7 +221,8 @@ export function createHarness(reply: (call: ModelCall) => string | { readonly fi
     },
     root,
     dispose(keep = false) {
-      ctx.learnCore.db.sqlite.close()
+      // Close through the service lifecycle, including its maintenance lease and feed.
+      ;(ctx.learnCore as typeof ctx.learnCore & { dispose(): void }).dispose()
       if (!keep) rmSync(root, { recursive: true, force: true })
     },
   }

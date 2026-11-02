@@ -11,6 +11,17 @@
 - 后台任务停止后 DSH 的 Node 进程可能还在：重启前按端口找到它，核对命令行含 `dsh … bin.js learning` 再结束。
 - 仓库里不用符号链接（本机要管理员权限）。Git Bash 会把以 `/` 开头的参数改写成 Windows 路径，需要原样传递时加 `MSYS_NO_PATHCONV=1`。
 
+## 备份和恢复
+
+停止所有 DSH，设置 `LEARNING_HOME`、`DSH_HOME` 后运行：
+
+```bash
+pnpm backup <学习库之外的空备份目录>
+pnpm restore <备份目录> <新的空学习库目录>
+```
+
+恢复后手动切换 `LEARNING_HOME`。密钥另存，备份不进 Git。清单、迁移快照与会话限制见 [core](core/design.md#备份和恢复) 和 [已知限制](core/design.md#已知限制与以后再做)。
+
 ## 三个端口
 
 | 端口 | 用途 | 数据目录 |
