@@ -1,5 +1,4 @@
 packages:
   - packages/*
-  - spikes/probe
 allowBuilds:
   esbuild: true

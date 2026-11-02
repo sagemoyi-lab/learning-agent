@@ -33,7 +33,6 @@
 | `tests/` | 跨单元的自动测试：`flow.test.ts` 用合成资料跑通整条最小学习流程 |
 | `scripts/` | 构建、装 DSH、安装 profile、启动本机 MinerU；界面截图（`browser.ts`）、演示 GIF（`gif.ts`）和验收用的假模型服务（`fake-openai.ts`） |
 | `.agents/skills/` | 开发技能（`.claude/skills/` 是 Claude Code 读取的入口） |
-| `spikes/` | 验证代码，不是产品代码 |
 
 每个单元的源码约定：`src/index.ts` 是后端入口，`src/client.tsx` 是前端入口；`package.json` 的 `exports` 指向 `lib/` 下的构建产物。
 

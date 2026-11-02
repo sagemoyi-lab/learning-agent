@@ -4,7 +4,6 @@
     "types",
     "packages/*/src/client.ts",
     "packages/*/src/client.tsx",
-    "packages/*/src/client/**/*",
-    "spikes/probe/src/client.tsx"
+    "packages/*/src/client/**/*"
   ]
 }

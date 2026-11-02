@@ -20,7 +20,6 @@ function workspaceDirs() {
   const dirs = readdirSync(join(root, 'packages'), { withFileTypes: true })
     .filter(entry => entry.isDirectory())
     .map(entry => join(root, 'packages', entry.name))
-  dirs.push(join(root, 'spikes', 'probe'))
   return dirs.filter(dir => existsSync(join(dir, 'package.json')))
 }
 

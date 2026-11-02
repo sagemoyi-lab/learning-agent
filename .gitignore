@@ -1,7 +1,6 @@
 # secrets
 .env
 .env.*
-!.env.example
 
 # user learning materials (copyrighted textbooks, personal photos)
 materials/
@@ -18,7 +17,6 @@ Thumbs.db
 
 # build output and local dev data
 packages/*/lib/
-spikes/probe/lib/
 .data/
 
 # scratch checks against local data (not part of the test suite)
