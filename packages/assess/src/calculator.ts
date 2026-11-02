@@ -5,6 +5,7 @@
 import type { MathNode } from 'mathjs'
 import { LearningApiError, type CalculationResult } from '@learning-agent/contracts'
 import { math, normalizeUnit } from './units.ts'
+import { expressionRefusal } from './safe-expression.ts'
 
 const MAX_LENGTH = 4000
 const MAX_LINES = 80
@@ -66,7 +67,7 @@ export function calculate(script: string, results: readonly string[] = []): Calc
     } catch (error) {
       throw new LearningApiError('learning/assess/calculation', `第 ${line.number} 行写法不对：${(error as Error).message}`)
     }
-    const refused = refusal(node)
+    const refused = refusal(node) ?? expressionRefusal(node, true)
     if (refused) throw new LearningApiError('learning/assess/calculation', `第 ${line.number} 行：${refused}`)
     let value: unknown
     try {

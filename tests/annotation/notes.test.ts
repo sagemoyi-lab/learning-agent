@@ -74,6 +74,7 @@ it('concurrent error submissions produce one proposal and one handoff', async ()
   const note = await create({ type: 'error', anchor: anchor(A, '静水压强也加倍', '水深加倍时，', '。'), text: '合成报错' })
   // Reset only the fixture link so concurrent calls exercise proposal creation rather than reuse.
   h.ctx.learnCore.db.sqlite.prepare("UPDATE annotation_annotations SET data=json_remove(data, '$.proposalId') WHERE id=?").run(note.id)
+  h.ctx.learnCore.db.sqlite.prepare('DELETE FROM annotation_proposals WHERE annotation_id=?').run(note.id)
   let handoffs = 0
   h.ctx.on('learning/handoff', event => { if (event.unit === 'annotation') handoffs++ })
   const replies = await Promise.all(Array.from({ length: 10 }, () => h.endpoint<Proposal>('annotation', 'submitError', { annotationId: note.id })))

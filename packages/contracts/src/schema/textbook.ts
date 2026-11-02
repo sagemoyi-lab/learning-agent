@@ -33,6 +33,8 @@ export const TextQuote = z.object({
   exact: z.string().min(1),
   prefix: z.string().default(''),
   suffix: z.string().default(''),
+  atStart: z.boolean().optional(),
+  atEnd: z.boolean().optional(),
 })
 export type TextQuote = z.infer<typeof TextQuote>
 

@@ -2,7 +2,12 @@
 // program, never by the model (packages/AGENTS.md, 调用模型). Numeric answers are read from the answer
 // box, so the working above it never supplies the number; units are converted before comparing.
 import type { Answer, AnswerInput, Grading, SingleAnswer, Verdict } from '@learning-agent/contracts'
-import { convert, math, normalizeUnit, prettyUnit, splitQuantity, unitOf } from './units.ts'
+import { all, create } from 'mathjs'
+import { convert, normalizeUnit, prettyUnit, splitQuantity, unitOf } from './units.ts'
+import { expressionRefusal } from './safe-expression.ts'
+
+// Learner expressions cannot mutate the calculator's unit instance.
+const math = create(all!, { number: 'number' })
 
 /** Choice letters (`A`, `B、C`, `ac`) → option indices. */
 export function parseChoices(text: string): number[] {
@@ -60,7 +65,11 @@ function judgeChoice(answer: Extract<SingleAnswer, { kind: 'choice' }>, final: s
 /** LaTeX and textbook notation → mathjs syntax, for equivalence checks. */
 function expressionText(text: string): string {
   let body = text.replace(/\$/g, '').trim()
-  body = body.split(/=/).at(-1) ?? body
+  // Permit a displayed result label, not function definitions or chained assignments.
+  if (body.includes('=')) {
+    if (!/^[\w\u0370-\u03ff]+\s*=\s*[^=]+$/.test(body)) throw new Error('不支持赋值或函数定义')
+    body = body.slice(body.indexOf('=') + 1)
+  }
   for (let i = 0; i < 4; i++) body = body.replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '(($1)/($2))').replace(/\\sqrt\s*\{([^{}]*)\}/g, 'sqrt($1)')
   const greek: Record<string, string> = { ρ: 'rho', μ: 'mu', λ: 'lambda', Δ: 'Delta', α: 'alpha', β: 'beta', ζ: 'zeta', ξ: 'xi', η: 'eta', ν: 'nu', π: 'pi', θ: 'theta', τ: 'tau', ε: 'epsilon', σ: 'sigma', φ: 'phi', ω: 'omega' }
   return body
@@ -75,9 +84,11 @@ function expressionText(text: string): string {
 
 /** True when the two expressions agree at several random points; undefined when either cannot be read. */
 export function equivalent(given: string, reference: string): boolean | undefined {
+  if (given.length > 4000 || reference.length > 4000) return undefined
   try {
     const a = math.parse(expressionText(given))
     const b = math.parse(expressionText(reference))
+    if (expressionRefusal(a) || expressionRefusal(b)) return undefined
     const symbols = new Set<string>()
     for (const node of [a, b]) node.traverse((child, _path, parent) => {
       const name = (child as unknown as { name?: string }).name

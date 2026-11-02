@@ -29,7 +29,7 @@ it('reads a paragraph as the reader sees it, keeping formulas as written', () =>
 it('anchors a quote that occurs once, and counts Chinese by character', () => {
   const found = locateQuote('水深加倍时，静水压强也加倍。流速不变。', quote('静水压强也加倍', '水深加倍时，', '。流速'))
   expect(found).toEqual({ status: 'anchored', start: 6, end: 13 })
-  expect(locateQuote('𠮷野家的压强', quote('压强'))).toMatchObject({ status: 'anchored' })
+  expect(locateQuote('𠮷野家的压强', { ...quote('压强'), atStart: false, atEnd: true })).toMatchObject({ status: 'anchored' })
 })
 
 it('does not pick the first of several matches when the context cannot tell them apart', () => {

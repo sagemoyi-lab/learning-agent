@@ -25,7 +25,7 @@ import {
 import { must, now } from '@learning-agent/kit'
 import { z } from 'zod'
 import type { NotePlace, NoteView } from './types.ts'
-import { locateQuote, placeAnnotation, plainText, quoteCutsFormula, quoteFound, type Candidate } from './anchor.ts'
+import { locateQuote, normalizeText, placeAnnotation, plainText, quoteCutsFormula, quoteFound, type Candidate } from './anchor.ts'
 
 export const name = 'learning-annotation'
 export const inject = ['learnCore', 'learnTextbook', 'learnCurriculum', 'learnLibrary', 'learnSidechat']
@@ -43,6 +43,18 @@ const migrations: Migration[] = [
       );
       CREATE INDEX annotation_by_course ON annotation_annotations (course_id, created_at);
       CREATE UNIQUE INDEX annotation_by_request ON annotation_annotations (course_id, request_id) WHERE request_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 2,
+    sql: `
+      CREATE TABLE annotation_proposals (
+        annotation_id TEXT PRIMARY KEY REFERENCES annotation_annotations(id),
+        proposal_id TEXT NOT NULL UNIQUE
+      );
+      INSERT INTO annotation_proposals (annotation_id, proposal_id)
+        SELECT id, json_extract(data, '$.proposalId') FROM annotation_annotations
+        WHERE json_extract(data, '$.proposalId') IS NOT NULL;
     `,
   },
 ]
@@ -66,6 +78,14 @@ const brief = (text: string, max = 40): string => {
 }
 
 const candidateOf = (block: BlockWithText): Candidate => ({ blockId: block.id, hash: block.hash, text: block.text })
+
+function quoteBoundaries(text: string, quote: TextQuote | undefined): TextQuote | undefined {
+  if (!quote) return undefined
+  const body = normalizeText(plainText(text)), exact = normalizeText(quote.exact)
+  const start = body.indexOf(exact)
+  const unique = start >= 0 && body.indexOf(exact, start + 1) < 0
+  return { ...quote, atStart: unique && start === 0, atEnd: unique && start + exact.length === body.length }
+}
 
 /** 10月8日 */
 const dayText = (at: string): string => { const date = new Date(at); return `${date.getMonth() + 1}月${date.getDate()}日` }
@@ -179,7 +199,7 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
         throw new LearningApiError('learning/annotation/quote-missing', '选中的文字不在这一段里（讲义可能刚刚改过），刷新页面后重新选')
       }
       this.refuseHalfFormula(block.text, anchor.quote)
-      anchor = { ...anchor, hash: block.hash }
+      anchor = { ...anchor, hash: block.hash, ...(anchor.quote ? { quote: quoteBoundaries(block.text, anchor.quote)! } : {}) }
       nodeIds = block.nodeIds
     } else {
       const chunk = must(this.ctx.learnLibrary.chunk(anchor.chunkId), 'annotation', '资料片段', anchor.chunkId)
@@ -190,7 +210,7 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
         throw new LearningApiError('learning/annotation/quote-missing', '选中的文字不在这个资料片段里')
       }
       this.refuseHalfFormula(chunk.text, anchor.quote)
-      anchor = { ...anchor, courseId: course.id }
+      anchor = { ...anchor, courseId: course.id, ...(anchor.quote ? { quote: quoteBoundaries(chunk.text, anchor.quote)! } : {}) }
     }
 
     const at = now()
@@ -413,6 +433,11 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
     const proposal = core.db.transaction(() => {
       const current = must(this.read(annotationId), 'annotation', '批注', annotationId)
       if (current.proposalId) return must(core.proposals.get(current.proposalId), 'annotation', '提案', current.proposalId)
+      const association = this.sqlite.prepare('SELECT proposal_id FROM annotation_proposals WHERE annotation_id=?').get(annotationId) as { proposal_id: string } | undefined
+      if (association) {
+        this.save({ ...current, proposalId: association.proposal_id as Proposal['id'] })
+        return must(core.proposals.get(association.proposal_id), 'annotation', '提案', association.proposal_id)
+      }
       const created = core.proposals.create({
         courseId: annotation.courseId,
         source: 'annotation',
@@ -421,6 +446,7 @@ class LearnAnnotationService extends Service implements LearnAnnotation {
         rationale: [`学习者说：${current.text}`, quote ? `段落 ^${block.id} 里选中的原句：「${quote}」` : `针对整段 ^${block.id}`].join('\n'),
       })
       this.save({ ...current, proposalId: created.id, updatedAt: now(), location })
+      this.sqlite.prepare('INSERT INTO annotation_proposals (annotation_id, proposal_id) VALUES (?, ?)').run(annotationId, created.id)
       createdNow = true
       return created
     })

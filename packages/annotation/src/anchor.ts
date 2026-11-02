@@ -123,8 +123,8 @@ export function locateQuote(text: string, quote: TextQuote): Located {
     const start = at[0]!
     const end = start + exact.length
     // The text right next to the quote must be what it was: "能忽略" inside a new "不能忽略" is another claim.
-    const leftChanged = prefix !== '' ? before(start).at(-1) !== prefix.at(-1) : /^[不非无未否]/.test(before(start).slice(-1))
-    const rightChanged = suffix !== '' ? after(end)[0] !== suffix[0] : /^(?:但|除|若|当|在|且|仅)/.test(after(end))
+    const leftChanged = quote.atStart === true ? before(start) !== '' : prefix !== '' ? before(start).at(-1) !== prefix.at(-1) : quote.atStart === undefined && before(start) !== ''
+    const rightChanged = quote.atEnd === true ? after(end) !== '' : suffix !== '' ? after(end)[0] !== suffix[0] : quote.atEnd === undefined && after(end) !== ''
     if (!leftChanged && !rightChanged) return { status: 'anchored', start, end }
     return {
       status: 'needs-confirmation',
@@ -202,6 +202,8 @@ export function placeAnnotation(
     if (candidates.length === 1 && (!anchorHash || anchorHash === first.hash)) return base({ status: 'anchored', blockId: first.blockId, hash: first.hash })
     return base({ status: 'needs-confirmation', ...(candidates.length === 1 ? { blockId: first.blockId, hash: first.hash } : {}), reason: '这一段改过或拆开了，请确认批注还属于哪里' })
   }
+
+  if (candidates.length === 1 && anchorHash === candidates[0]!.hash && occurrences(normalizeText(plainText(candidates[0]!.text)), normalizeText(quote.exact)).length === 1) return base({ status: 'anchored', blockId: candidates[0]!.blockId, hash: candidates[0]!.hash })
 
   const results = candidates.map(candidate => ({ candidate, found: locateQuote(plainText(candidate.text), quote) }))
   const anchored = results.filter(result => result.found.status === 'anchored')
