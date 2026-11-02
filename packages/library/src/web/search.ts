@@ -96,10 +96,10 @@ export function tavilyProvider(key: string, base = 'https://api.tavily.com'): Se
 }
 
 /** Exa's own copy of a page, for pages this computer cannot open. */
-export async function exaContents(key: string, url: string, signal?: AbortSignal, base = 'https://api.exa.ai'): Promise<{ title?: string; text: string } | undefined> {
-  const body = await post<{ results?: { title?: string; text?: string }[] }>('Exa', `${base}/contents`, { 'x-api-key': key }, { urls: [url], text: { maxCharacters: 100_000 } }, signal)
+export async function exaContents(key: string, url: string, signal?: AbortSignal, base = 'https://api.exa.ai'): Promise<{ url?: string; title?: string; text: string } | undefined> {
+  const body = await post<{ results?: { url?: string; title?: string; text?: string }[] }>('Exa', `${base}/contents`, { 'x-api-key': key }, { urls: [url], text: { maxCharacters: 100_000 } }, signal)
   const result = body.results?.[0]
-  return result?.text?.trim() ? { title: result.title, text: result.text } : undefined
+  return result?.text?.trim() ? { url: result.url, title: result.title, text: result.text } : undefined
 }
 
 /** Run one query on the first provider that answers; earlier failures become notes. */

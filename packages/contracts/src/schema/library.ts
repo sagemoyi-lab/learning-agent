@@ -16,7 +16,7 @@ export const Source = z.object({
   origin: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('file'), fileName: z.string() }),
     /** Found online: a page kept as Markdown (`html`, no pages) or a PDF parsed like an upload. */
-    z.object({ kind: z.literal('web'), url: z.url(), fetchedAt: instant, format: z.enum(['html', 'pdf']).default('html') }),
+    z.object({ kind: z.literal('web'), url: z.url(), requestedUrl: z.url().optional(), redirects: z.array(z.url()).optional(), fetchedAt: instant, format: z.enum(['html', 'pdf']).default('html') }),
   ]),
   /** Folder under `library/`, e.g. `src_01JA…-化工原理第3版`. */
   folder: relativePath,

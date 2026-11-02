@@ -34,6 +34,7 @@ export function isPublicAddress(address: string): boolean {
 export interface Downloaded {
   /** After redirects. */
   readonly url: string
+  readonly redirects: readonly string[]
   readonly status: number
   readonly contentType: string
   readonly body: Buffer
@@ -58,7 +59,10 @@ export async function download(url: string, options: DownloadOptions): Promise<D
   const deadline = AbortSignal.timeout(options.timeoutMs ?? 30_000)
   const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline
   let current = new URL(url)
+  const redirects: string[] = []
   for (let hop = 0; ; hop++) {
+    if (redirects.includes(current.href)) throw new DownloadError('跳转形成循环')
+    redirects.push(current.href)
     if (current.protocol !== 'http:' && current.protocol !== 'https:') throw new DownloadError('只能打开 http 和 https 网址')
     const literal = current.hostname.replace(/^\[|\]$/g, '')
     if (isIP(literal) && !allow(literal)) throw new DownloadError('不访问本机或局域网地址')
@@ -71,7 +75,7 @@ export async function download(url: string, options: DownloadOptions): Promise<D
       continue
     }
     const body = await read(response, options.maxBytes, signal)
-    return { url: current.toString(), status: response.statusCode ?? 0, contentType: String(response.headers['content-type'] ?? ''), body }
+    return { url: current.toString(), redirects, status: response.statusCode ?? 0, contentType: String(response.headers['content-type'] ?? ''), body }
   }
 }
 

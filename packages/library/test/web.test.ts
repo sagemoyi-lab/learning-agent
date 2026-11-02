@@ -133,6 +133,7 @@ beforeAll(async () => {
     const json = (value: unknown, status = 200) => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)) }
     if (path === '/page.html') { response.writeHead(200, { 'content-type': 'text/html' }); response.end(gbk(ARTICLE)); return }
     if (path === '/moved') { response.writeHead(302, { location: '/page.html' }); response.end(); return }
+    if (path === '/foreign') { response.writeHead(302, { location: `${base.replace('127.0.0.1', 'localhost')}/page.html` }); response.end(); return }
     if (path === '/app.html') { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); response.end('<html><head><title>应用</title></head><body><div id="app"></div><script>render()</script></body></html>'); return }
     if (path === '/doc.pdf') { response.writeHead(200, { 'content-type': 'application/pdf' }); response.end(Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 3 >>\nendobj\ntrailer << /Root 1 0 R >>\n%%EOF\n', 'latin1')); return }
     if (path === '/slides.pptx') { response.writeHead(200, { 'content-type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }); response.end('PK'); return }
@@ -263,6 +264,24 @@ describe('adding material found online', () => {
     const again = await web.add('course-other', [{ url: local('/page.html') }], 'teacher')
     expect(again[0]).toMatchObject({ status: 'added', sourceId: source.id })
     expect(store.courseSources('course-other')).toHaveLength(1)
+  })
+
+  it('uses the weakest redirect source and cites the final URL', async () => {
+    const [pending] = await web.add(course, [{ url: local('/foreign') }], 'teacher')
+    expect(pending?.status).toBe('pending')
+    expect(store.courseSources(course)).toHaveLength(0)
+    expect(web.pending(course)[0]?.url).toBe(host('/page.html'))
+    const reading = await web.read(local('/foreign'))
+    expect(reading).toMatchObject({ status: 'read', url: host('/page.html'), authority: '3' })
+    store.setSiteRule('localhost', 'clue')
+    expect((await web.add(course, [{ url: local('/foreign') }], 'learner'))[0]?.status).toBe('rejected')
+    expect((await web.read(local('/foreign'))).status).toBe('rejected')
+  })
+
+  it('persists requested and final addresses for trusted same-site redirects', async () => {
+    const [added] = await web.add(course, [{ url: local('/moved') }], 'teacher')
+    expect(added?.status).toBe('added')
+    expect(store.source(added!.sourceId!)?.origin).toMatchObject({ url: local('/page.html'), requestedUrl: local('/moved'), redirects: [local('/moved'), local('/page.html')] })
   })
 
   it('holds a third-level source the teacher found until the learner confirms it', async () => {

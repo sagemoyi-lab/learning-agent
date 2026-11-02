@@ -174,7 +174,7 @@ export class LibraryStore {
    * Keep a web page: the fetched HTML (when this computer could open it) and the Markdown its chunks
    * came from, in `library/<id>-<title>/`. The same text found again is the same source.
    */
-  importWebPage(input: { title: string; url: string; authority: Source['authority']; markdown: string; chunks: readonly PageChunk[]; html?: string; via: 'local' | 'exa'; courseId?: string }): Source {
+  importWebPage(input: { title: string; url: string; requestedUrl?: string; redirects?: readonly string[]; authority: Source['authority']; markdown: string; chunks: readonly PageChunk[]; html?: string; via: 'local' | 'exa'; courseId?: string }): Source {
     if (!input.chunks.some(chunk => chunk.kind !== 'heading' && chunk.text.trim())) throw new LearningApiError('learning/library/empty', '这个网页没有取到正文')
     const fingerprint = createHash('sha256').update(input.markdown).digest('hex')
     const reused = this.byFingerprint(fingerprint)
@@ -197,7 +197,7 @@ export class LibraryStore {
       title: input.title,
       kind: 'web',
       authority: input.authority,
-      origin: { kind: 'web', url: input.url, fetchedAt, format: 'html' },
+      origin: { kind: 'web', url: input.url, requestedUrl: input.requestedUrl ?? input.url, redirects: input.redirects ?? [input.url], fetchedAt, format: 'html' },
       folder,
       parser: input.via === 'exa' ? { name: 'exa-contents', where: 'cloud' } : { name: 'readability', where: 'local' },
       pageOffset: 0,

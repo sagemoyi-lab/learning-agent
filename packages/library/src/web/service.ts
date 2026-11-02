@@ -22,8 +22,8 @@ const FACTORY: Record<ProviderId, (key: string, base?: string) => SearchProvider
 
 /** What a fetch of one address gave: a page's main text, a PDF to import, or why neither. */
 type WebPage =
-  | { readonly kind: 'page'; readonly title: string; readonly markdown: string; readonly chunks: PageChunk[]; readonly html?: string; readonly via: 'local' | 'exa'; readonly why?: string }
-  | { readonly kind: 'pdf'; readonly finalUrl: string; readonly body: Buffer }
+  | { readonly kind: 'page'; readonly finalUrl: string; readonly redirects: readonly string[]; readonly title: string; readonly markdown: string; readonly chunks: PageChunk[]; readonly html?: string; readonly via: 'local' | 'exa'; readonly why?: string }
+  | { readonly kind: 'pdf'; readonly finalUrl: string; readonly redirects: readonly string[]; readonly body: Buffer }
   | { readonly kind: 'failed'; readonly message: string }
 
 export interface WebSettings {
@@ -105,7 +105,7 @@ export class LibraryWeb {
       this.ctx.emit('learning/web-changed', { courseId })
       return { url, status: 'pending', message: `三级来源（${rating.rule}），等学习者在资料库页确认后才能引用：${pending.title}` }
     }
-    return this.fetchInto(courseId, url, item.title, rating.authority, rating.rule, signal)
+    return this.fetchInto(courseId, url, item.title, rating.authority, rating.rule, signal, by === 'teacher')
   }
 
   pending(courseId?: string): WebPending[] {
@@ -134,12 +134,23 @@ export class LibraryWeb {
     return `《${this.store.source(sourceId)?.title ?? sourceId}》`
   }
 
-  private async fetchInto(courseId: string, url: string, title: string | undefined, authority: Authority, rule: string, signal?: AbortSignal): Promise<WebAdded> {
-    const level = `${AUTHORITY_TEXT[authority]}，${rule}`
+  private async fetchInto(courseId: string, url: string, title: string | undefined, authority: Authority, rule: string, signal?: AbortSignal, teacher = false): Promise<WebAdded> {
     const page = await this.page(url, title, signal)
     if (page.kind === 'failed') return { url, status: 'failed', message: page.message }
-    if (page.kind === 'pdf') return this.importPdf(courseId, url, page.finalUrl, page.body, title, authority, rule)
-    const source = this.store.importWebPage({ title: title?.trim() || page.title || siteOf(url), url, authority, markdown: page.markdown, chunks: page.chunks, ...(page.html ? { html: page.html } : {}), via: page.via, courseId })
+    const ratings = page.redirects.map(address => rate(address, this.store.siteRules()))
+    const refused = ratings.find(rating => rating.authority === 'blocked' || rating.authority === 'clue')
+    if (refused) return { url, status: 'rejected', message: `跳转来源不能引用：${refused.rule}` }
+    const worst = ratings.reduce((a, b) => Number(b.authority) > Number(a.authority) ? b : a, { authority, rule })
+    authority = worst.authority as Authority
+    rule = worst.rule
+    if (teacher && authority === '3') {
+      this.store.proposeWeb({ id: randomUUID(), courseId, url: page.finalUrl, title: title?.trim() || siteOf(page.finalUrl), snippet: '', site: siteOf(page.finalUrl), organization: organization(siteOf(page.finalUrl)), authority, rule, format: formatOf(page.finalUrl), provider: '', reason: '跳转后来源需要确认', proposedAt: new Date().toISOString() })
+      this.ctx.emit('learning/web-changed', { courseId })
+      return { url, status: 'pending', message: '跳转后为三级来源，等待学习者确认' }
+    }
+    const level = `${AUTHORITY_TEXT[authority]}，${rule}`
+    if (page.kind === 'pdf') return this.importPdf(courseId, page.finalUrl, page.finalUrl, page.body, title, authority, rule)
+    const source = this.store.importWebPage({ title: title?.trim() || page.title || siteOf(page.finalUrl), url: page.finalUrl, requestedUrl: url, redirects: page.redirects, authority, markdown: page.markdown, chunks: page.chunks, ...(page.html ? { html: page.html } : {}), via: page.via, courseId })
     this.ctx.emit('learning/source-imported', { sourceId: source.id })
     const how = page.via === 'exa' ? `网页；${page.why}，正文来自 Exa 的副本` : '网页'
     return { url, status: 'added', sourceId: source.id, message: `已加入本课（${level}，${how}）：《${source.title}》` }
@@ -159,8 +170,12 @@ export class LibraryWeb {
     const page = await this.page(url, undefined, signal)
     if (page.kind === 'pdf') return { url, status: 'failed', message: '这是 PDF，要解析后才能读' }
     if (page.kind === 'failed') return { url, status: 'failed', message: page.message }
+    const ratings = page.redirects.map(address => rate(address, this.store.siteRules()))
+    const worst = ratings.reduce((a, b) => Number(b.authority) > Number(a.authority) ? b : a, rating)
+    const refused = ratings.find(item => item.authority === 'blocked' || item.authority === 'clue')
+    if (refused) return { url, status: 'rejected', message: `跳转来源不能引用：${refused.rule}` }
     const passages = page.chunks.filter(chunk => chunk.kind !== 'heading' && chunk.text.trim()).map(chunk => chunk.text)
-    return { status: 'read', url, title: page.title.trim() || siteOf(url), site: siteOf(url), authority: rating.authority, rule: rating.rule, passages }
+    return { status: 'read', url: page.finalUrl, title: page.title.trim() || siteOf(page.finalUrl), site: siteOf(page.finalUrl), authority: worst.authority as Authority, rule: worst.rule, passages }
   }
 
   /** A page's main text: read here, else Exa's copy (never for a PDF, whose formulas come out scrambled). A PDF is handed back as it is. */
@@ -176,15 +191,18 @@ export class LibraryWeb {
       return this.exaCopy(url, title, `这台电脑打不开原网页（${reason}）`, signal)
     }
     const isPdf = /application\/pdf/i.test(fetched.contentType) || fetched.body.subarray(0, 1024).toString('latin1').includes('%PDF-')
-    if (isPdf) return { kind: 'pdf', finalUrl: fetched.url, body: fetched.body }
+    if (isPdf) return { kind: 'pdf', finalUrl: fetched.url, redirects: fetched.redirects, body: fetched.body }
     const type = fetched.contentType.split(';')[0]!.trim().toLowerCase()
     // A server that names no type usually serves a page.
     if (type && type !== 'text/html' && type !== 'application/xhtml+xml' && type !== 'text/plain') return { kind: 'failed', message: `暂时只能加入网页和 PDF（这是 ${type}）` }
     const html = decodeHtml(fetched.body, fetched.contentType)
     const read = type === 'text/plain' ? { title: '', markdown: html } : readPage(html)
     const chunks = chunksFromMarkdown(read.markdown)
-    if (textLength(chunks) < MIN_TEXT) return this.exaCopy(url, title ?? read.title, '网页里几乎没有正文（可能要在浏览器里才能显示）', signal)
-    return { kind: 'page', title: read.title, markdown: read.markdown, chunks, html, via: 'local' }
+    if (textLength(chunks) < MIN_TEXT) {
+      const copy = await this.exaCopy(fetched.url, title ?? read.title, '网页里几乎没有正文（可能要在浏览器里才能显示）', signal)
+      return copy.kind === 'page' ? { ...copy, redirects: [...fetched.redirects, ...copy.redirects] } : copy
+    }
+    return { kind: 'page', finalUrl: fetched.url, redirects: fetched.redirects, title: read.title, markdown: read.markdown, chunks, html, via: 'local' }
   }
 
   /** Exa's copy of a page this computer cannot open or read. */
@@ -198,7 +216,7 @@ export class LibraryWeb {
     }
     const chunks = copy ? chunksFromMarkdown(copy.text) : []
     if (!copy || textLength(chunks) < MIN_TEXT) return { kind: 'failed', message: `${why}，Exa 也没有它的正文` }
-    return { kind: 'page', title: title?.trim() || copy.title?.trim() || '', markdown: copy.text, chunks, via: 'exa', why }
+    return { kind: 'page', finalUrl: copy.url ?? url, redirects: [url, copy.url ?? url], title: title?.trim() || copy.title?.trim() || '', markdown: copy.text, chunks, via: 'exa', why }
   }
 
   private importPdf(courseId: string, url: string, finalUrl: string, body: Buffer, title: string | undefined, authority: Authority, rule: string): WebAdded {
