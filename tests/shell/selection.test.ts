@@ -1,9 +1,16 @@
 // What a learner selects in a rendered textbook paragraph must come back as the text the annotation unit compares
 // against: formulas as their `$…$` source, citation badges left out (packages/shell/src/client/selection.ts).
-import { parseHTML } from 'linkedom'
-import { expect, it } from 'vitest'
+import { JSDOM } from 'jsdom'
+import { beforeAll, afterAll, expect, it, vi } from 'vitest'
 import { locateQuote, normalizeText, plainText } from '../../packages/annotation/src/anchor.ts'
-import { toHtml } from '../../packages/shell/src/client/html.ts'
+let toHtml: typeof import('../../packages/shell/src/client/html.ts').toHtml
+const dom = new JSDOM('')
+const parseHTML = (html: string) => new JSDOM(html).window
+beforeAll(async () => {
+  vi.stubGlobal('window', dom.window)
+  toHtml = (await import('../../packages/shell/src/client/html.ts')).toHtml
+})
+afterAll(() => { vi.unstubAllGlobals(); dom.window.close() })
 import { sourceText } from '../../packages/shell/src/client/selection.ts'
 import { findQuote } from '../../packages/annotation/src/marks.ts'
 

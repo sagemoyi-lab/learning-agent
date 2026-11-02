@@ -2,11 +2,29 @@
 // Kept apart from the React component so it can be tested without a browser.
 import { Marked } from 'marked'
 import markedKatex from 'marked-katex-extension'
+import DOMPurify from 'dompurify'
 
 const UNVERIFIED = 'unverified'
 
 function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!)
+}
+
+function safeLink(href: string): boolean {
+  return /^(https?:|mailto:)/i.test(href) && !/[\u0000-\u0020\u007f]/.test(href)
+}
+
+/** The sole HTML publication boundary; preserve MathML, never active content or image requests. */
+function sanitize(html: string): string {
+  if (typeof DOMPurify.sanitize !== 'function') throw new Error('Markdown rendering requires a browser DOM')
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true, mathMl: true },
+    ADD_TAGS: ['annotation', 'semantics'],
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'img', 'video', 'audio', 'source', 'link', 'meta'],
+    ADD_ATTR: ['data-cite', 'data-figure', 'data-la-opens', 'encoding', 'rel', 'target'],
+    ADD_URI_SAFE_ATTR: ['encoding', 'rel', 'target'],
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
+  })
 }
 
 /**
@@ -40,7 +58,7 @@ marked.use({
     },
     /** `![图1-3](cite:ck_…)`: a figure cut out of its page, drawn by the page that shows the text; a link until then. */
     image({ href, text }) {
-      if (!href.startsWith('cite:')) return false
+      if (!href.startsWith('cite:')) return safeLink(href) ? `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(text || '外部图片（点击打开）')}</a>` : escapeHtml(text)
       const target = escapeHtml(href.slice('cite:'.length))
       return `<span class="la-md-figure" data-figure="${target}"><a class="la-cite" data-cite="${target}" data-la-opens title="${escapeHtml(text)} · 点击查看原图">${escapeHtml(text || '图')}</a></span>`
     },
@@ -52,7 +70,8 @@ marked.use({
         const badge = citeBadge(label)
         return `<a class="la-cite" data-cite="${escapeHtml(target)}" data-la-opens title="${escapeHtml(`${badge.full} · 点击查看原文`)}">${escapeHtml(badge.short)}</a>`
       }
-      return `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${label}</a>`
+      if (!safeLink(href)) return label
+      return `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${label}</a>`
     },
   },
 })
@@ -68,12 +87,12 @@ function linkBareChunks(text: string): string {
 const SAME_BADGES = /(<a class="la-cite" data-cite="[^"]*" data-la-opens title="([^"]*)">[^<]*<\/a>)(?:\s*<a class="la-cite" data-cite="[^"]*" data-la-opens title="\2">[^<]*<\/a>)+/g
 
 export function toHtml(text: string): string {
-  return marked.parse(linkBareChunks(text), { async: false })
+  return sanitize(marked.parse(linkBareChunks(text), { async: false })
     .replace(SAME_BADGES, '$1')
     // A wide table scrolls inside its own frame instead of widening the column.
-    .replace(/<table>/g, '<div class="la-table"><table>').replace(/<\/table>/g, '</table></div>')
+    .replace(/<table>/g, '<div class="la-table"><table>').replace(/<\/table>/g, '</table></div>'))
 }
 
 export function toInlineHtml(text: string): string {
-  return marked.parseInline(linkBareChunks(text), { async: false })
+  return sanitize(marked.parseInline(linkBareChunks(text), { async: false }))
 }

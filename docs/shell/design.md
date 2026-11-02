@@ -88,6 +88,7 @@
 
 ## 前端方案
 
+- 共享 Markdown 的块与行内出口用 DOMPurify 净化：允许 KaTeX MathML、表格、折叠引文与引用标记；不允许脚本、事件属性、表单、嵌入页面和自动加载图片。链接只接受 HTTP、HTTPS、mailto；外部图片只显示点击链接，`cite:` 图由资料裁图组件处理。
 - 用 DSH `web-app` 组合的服务端（HTTP 服务、认证、会话接口）负责模型、会话、工具和 Agent 循环；前端跑在 DSH 的客户端内核上（启动加载、连接认证、会话流、热重载）。DSH 的渲染器只渲染一个 `root` 插槽，外壳占了它就拥有整页；组合包关掉 DSH 自己的界面插件，只留提供设置表单服务的 `ui-settings`。外壳和各单元的页面都是我们自己的前端插件。
 - 前端零件：停靠布局用 dockview，知识图谱用 sigma.js（布局 d3-force），原文 PDF 用 pdf.js。React 版本跟随 DSH（18）。dockview 的容器有 `contain: layout`，里面的 `position: fixed` 会相对它定位，所以弹出的菜单不能靠 fixed 跳出停靠区。
 - 页面用共享的页面骨架（`Page`、`PageHeader`、`Section`），控件用 `kit/client` 的共享设计控件。
@@ -121,6 +122,7 @@
 
 ## 已知限制与以后再做
 
+- 锁定 DSH 的真实页面响应未提供 CSP；外壳不能只为业务 Markdown 添加 nonce 而不影响 DSH 的启动脚本。当前防线是统一出口净化，不能声称已有 CSP 纵深保护。`scripts/check-rendering.ts` 在真实 Chromium 验证攻击不执行、无外部图片请求及公式、引用保留。
 - 手机布局只在 headless Chromium 的触屏模拟里看过，还没在真手机上看过：地址栏伸缩、软键盘盖住输入框、iPhone 底部横条的留白。
 - DSH 只监听本机（127.0.0.1），手机要访问得把 DSH 开到局域网上，超出"只在本机用"的范围，没有做；现在用电脑浏览器的手机模拟或把窗口拉窄来用。
 - 平板竖屏（600–1180 像素）沿用桌面布局，侧栏浮起，但按钮没有放大。
