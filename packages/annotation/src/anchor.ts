@@ -1,4 +1,4 @@
-// Finding an annotation's place again (docs/annotation/design.md, 定位). Pure functions, no services.
+// Finding an annotation's place again (docs/annotation/design.md, 怎么运作). Pure functions, no services.
 //
 // The quote the learner selected (with a little text before and after) is the only thing trusted: a
 // position is never stored, and a paragraph id only says which paragraph to look in. A place is shown

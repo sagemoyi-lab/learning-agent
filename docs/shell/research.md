@@ -1,7 +1,7 @@
 # 外壳做深调研
 
-> 2026-10-16 · Claude · 状态：调研完成，采用的设计和验收标准以 [design.md](design.md) 为准。
-> 依据：你 10-12 的试用反馈（[throughts.md](../throughts.md)）、10-15 定下的方向（[design.md](design.md)"10-12 试用后的改版"）、Obsidian 的帮助文档和插件接口、dockview 4.13 的源码和文档、本机 Chrome 实测，以及外壳和各单元的现有代码。
+> 2026-10-16 的调研记录，第 5 节是 11-01 补的。现在怎么运作、采用了哪些结论，以 [design.md](design.md) 为准；当时的代码核对、分批和验收草案、交接说明、给契约的补充建议已经删去，在 git 里能找到。
+> 依据：你 10-12 的试用反馈（[throughts.md](../throughts.md)）、10-15 定下的方向、Obsidian 的帮助文档和插件接口、dockview 4.13 的源码和文档、本机 Chrome 实测，以及外壳和各单元的现有代码。
 
 ## 1. 结论与推荐取舍
 
@@ -39,15 +39,6 @@
 - 鼠标侧键：Chrome 在 `mouseup` 时执行后退和前进，网页在这时阻止默认行为就能接管；Firefox 不把侧键交给网页（[Mozilla bug 1720538](https://bugzilla.mozilla.org/show_bug.cgi?id=1720538)、[讨论](https://discourse.mozilla.org/t/firefox-mouse-back-forward-buttons-do-not-reliably-reach-page-javascript/148988)）。
 
 **Logseq 的右侧栏**：Shift+点击页面或块，把它放进右侧栏；新的放在最上面，一张张叠下去。（[社区说明](https://discuss.logseq.com/t/how-to-work-with-logseqs-right-hand-sidebar/8461)）
-
-## 3. 现有代码的情况
-
-- 外壳用 dockview 的默认渲染方式，切走的标签被卸载；打开页面时"没开过就新建一个标签"。这是你试用时遇到的两个问题的原因。
-- 教材页的上一节、下一节在页面内部换课时，不经过外壳，所以没有历史，标签标题也不变。
-- 测试页停止输入 0.6 秒后保存草稿；离开页面时把还没保存的那次丢掉了。单标签导航后离开页面更频繁，需要改成离开时立即保存。
-- 页面的 `useLoad` 收到任何推送都刷新，不管页面在不在前台。
-- 各单元有 33 处调用 `openPage`，其中 6 处用分屏打开出处或资料。
-- kit 打包进每个单元各一份，外壳不能用 kit 里的 React context 给页面传"是否在前台"，要通过外壳的 `learnShell` 服务。
 
 ## 4. 对已定方向的细化
 

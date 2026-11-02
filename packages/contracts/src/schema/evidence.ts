@@ -117,7 +117,7 @@ export type CourseState = z.infer<typeof CourseState>
 
 /**
  * Derived; deleting every row and recomputing from the log must give the same result. Owner: learner.
- * A merged identity's log entries count for the node it was merged into (docs/knowledge/design.md, C).
+ * A merged identity's log entries count for the node it was merged into (docs/knowledge/design.md, 合并).
  */
 export const NodeState = z.object({
   nodeId: idOf('node'),

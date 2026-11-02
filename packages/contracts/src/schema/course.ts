@@ -145,7 +145,7 @@ export type GoalFrontmatter = z.infer<typeof GoalFrontmatter>
 export const StageStatus = z.enum(['planned', 'designing', 'ready', 'learning', 'testing', 'reviewing', 'done'])
 export type StageStatus = z.infer<typeof StageStatus>
 
-/** After a stage review: on to the next stage, or a remedial stage first (docs/curriculum/design.md, A). */
+/** After a stage review: on to the next stage, or a remedial stage first (docs/curriculum/design.md, 阶段复盘). */
 export const ReviewChoice = z.enum(['next', 'remedial'])
 export type ReviewChoice = z.infer<typeof ReviewChoice>
 
@@ -190,7 +190,7 @@ export const Stage = z.object({
   folder: relativePath,
   /** Keys of the goal's "can do" items this stage builds towards. */
   supports: z.array(z.string()).default([]),
-  /** The stage's core knowledge nodes: its stage test covers each (docs/assess/design.md, B). */
+  /** The stage's core knowledge nodes: its stage test covers each (docs/assess/design.md, 阶段测试和结课检验). */
   nodeIds: z.array(idOf('node')).default([]),
   /** A remedial stage: the stage whose review it follows. */
   remedialOf: idOf('stage').optional(),

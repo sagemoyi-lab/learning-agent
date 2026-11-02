@@ -1,4 +1,4 @@
-// Adaptive diagnostics (docs/assess/design.md, B): one problem at a time along the hard prerequisites
+// Adaptive diagnostics (docs/assess/design.md, 摸底和前测): one problem at a time along the hard prerequisites
 // of the nodes the test probes. Right → probe what depends on the node; wrong or "不会" → probe what it
 // requires. Pure: the scope the test saved when it started and its answers decide the next node and the
 // result, so a diagnosis can always be recomputed. Inferred nodes are for planning only, never evidence.

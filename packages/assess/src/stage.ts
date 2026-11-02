@@ -1,4 +1,4 @@
-// Stage tests (docs/assess/design.md, B): assembled by rule from reserved problems new to the learner,
+// Stage tests (docs/assess/design.md, 阶段测试和结课检验): assembled by rule from reserved problems new to the learner,
 // and reported per core node instead of a pass mark on the total. Pure, like adaptive.ts.
 import type { NodeOutcome, Problem, ProbeNode, StagePlan, StageReport, Verdict } from '@learning-agent/contracts'
 

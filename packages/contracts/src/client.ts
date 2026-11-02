@@ -135,7 +135,7 @@ export type ReaderNotesProps =
   | { readonly part: 'notes'; readonly courseId: string; readonly blockId: string }
 
 /**
- * What the annotation unit shows next to a source's recognized text in the reader (docs/annotation/design.md, B): the
+ * What the annotation unit shows next to a source's recognized text in the reader (docs/annotation/design.md, 怎么用): the
  * 批注 menu for the chunk (`actions`) and the notes on it with the box to write one (`notes`). The library hosts it.
  */
 export interface SourceNotesProps {

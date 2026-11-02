@@ -1,7 +1,7 @@
 // learner unit, host half. Provides `ctx.learnLearner` (contracts §5.1): node mastery states derived from the
 // evidence log only (rules.ts, docs/learner/design.md). States are a cache: deleting them and recomputing gives
 // the same result (decision #1). A merged identity's entries count for the node it was merged into; they keep
-// the id they were logged with (docs/knowledge/design.md, C).
+// the id they were logged with (docs/knowledge/design.md, 合并).
 import { Service, type Context } from '@deepseek-ai/cordis'
 import { NodeState, type EvidenceRecord, type LearnLearner, type LogEntry, type MasteryState, type Migration } from '@learning-agent/contracts'
 import { z } from 'zod'

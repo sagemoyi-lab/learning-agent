@@ -1,4 +1,4 @@
-// tutor unit: when the course brief reaches the teacher (docs/tutor/design.md, A). The brief goes in
+// tutor unit: when the course brief reaches the teacher (docs/tutor/design.md, 课程简报). The brief goes in
 // before a turn's first step only when the model cannot already see the same one. That is read from
 // the committed session log through a session projection (the seam DSH's own time context uses), so
 // a restart, a turn cancelled before its messages were committed, or a compaction that summarized the

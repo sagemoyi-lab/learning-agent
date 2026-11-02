@@ -1,4 +1,4 @@
-// tutor unit: the classroom record (docs/tutor/design.md, B). After each teacher turn, what was said
+// tutor unit: the classroom record (docs/tutor/design.md, 课堂记录). After each teacher turn, what was said
 // since the last record is read back from the session and sorted by a one-shot model into the help
 // the teacher gave and what the learner said about their own knowledge: claims, questions and
 // possible misconceptions. The program keeps only what it can check: knowledge points and problems

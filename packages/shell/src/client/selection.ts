@@ -1,5 +1,5 @@
 // What the learner selected inside a textbook paragraph, as the Markdown source the server compares against
-// (docs/annotation/design.md, 选区). The page shows rendered text: a formula is KaTeX markup and a citation is a
+// (docs/annotation/design.md, 怎么运作). The page shows rendered text: a formula is KaTeX markup and a citation is a
 // badge. The server's plain text keeps a formula as its `$…$` source and leaves citations out, so the selection
 // is turned back the same way, and a selection that touches a formula takes the whole formula.
 import type { TextQuote } from '@learning-agent/contracts'

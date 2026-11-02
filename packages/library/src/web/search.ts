@@ -1,4 +1,4 @@
-// Web search services behind one interface (docs/library/design.md "服务兼容"): the learner's preferred
+// Web search services behind one interface (docs/library/design.md, 在线服务): the learner's preferred
 // service first, then the measured order; a failing or missing service hands over to the next one.
 // Each question runs twice: limited to trusted sites, and open. Results are rated by site rules.
 import type { SiteRule, WebCandidate, WebSearch } from '@learning-agent/contracts'

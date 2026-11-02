@@ -1,4 +1,4 @@
-// The restricted calculator (docs/assess/design.md, A): assignments with units, one per line, and
+// The restricted calculator (docs/assess/design.md, 题从哪来): assignments with units, one per line, and
 // nothing else. Every line is parsed and its syntax tree checked before anything runs: no function
 // definitions, matrices, ranges, property access or calls outside a short list of maths functions,
 // so a script can neither reach mathjs' own `import`/`evaluate` nor build something that never ends.

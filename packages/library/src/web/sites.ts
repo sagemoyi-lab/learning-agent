@@ -1,5 +1,5 @@
 // Site rules: how much a page found online can be trusted, decided by where it lives, never by a model
-// (docs/library/research.md "怎么判断权威"). The learner's rules override the built-in ones; within each
+// (docs/library/design.md, 联网找权威资料). The learner's rules override the built-in ones; within each
 // set the most specific match wins. Unknown sites are clues: they may point somewhere, never be cited.
 import type { Authority, SiteRule } from '@learning-agent/contracts'
 

@@ -2,14 +2,14 @@
 // attempts, grading. Numeric and choice answers are graded by rule; open answers by the model,
 // with its confidence (low → pending review, never "wrong"). Every grading is appended to the
 // evidence log, which is what mastery is computed from.
-// Textbook exercises are imported by number from library's parse (docs/assess/design.md, A); answers
+// Textbook exercises are imported by number from library's parse (docs/assess/design.md, 题从哪来); answers
 // without a printed or authoritative source come from the restricted calculator.
 // Diagnostics probe one problem at a time along the prerequisites; stage tests are assembled by rule and
 // reported per node; flagged problems are swapped and checked by the teacher; gradings can be appealed
-// and regraded, the regrade appended to the log (docs/assess/design.md, B). Answers are saved as they are
+// and regraded, the regrade appended to the log (docs/assess/design.md, 这题有问题、申诉和改判). Answers are saved as they are
 // written; photo answers are read twice by a vision model and graded once the learner confirms the reading;
 // past papers are imported by number; mock exams are assembled by the exam's question types, timed and
-// scored by section (docs/assess/design.md, C).
+// scored by section (docs/assess/design.md, 模拟考).
 import { mkdirSync, rmSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -270,7 +270,7 @@ class LearnAssessService extends Service implements LearnAssess {
 
   /**
    * Model grading for one part (open answers, and expressions not shown equal by substitution). A rubric of
-   * several points is judged point by point and scored by the share met (docs/assess/design.md, B).
+   * several points is judged point by point and scored by the share met (docs/assess/design.md, 判分).
    */
   private async gradeByModel(problem: Problem, part: { label: string; answer: SingleAnswer }, final: string, working: string, signal?: AbortSignal) {
     const points = part.answer.kind === 'open' ? rubricPoints(part.answer.rubric) : []
@@ -546,7 +546,7 @@ class LearnAssessService extends Service implements LearnAssess {
     const saved = this.ctx.learnCore.db.transaction(() => {
       const saved = this.store.saveProblem(next)
       for (const report of this.store.reports({ problemId, open: true })) this.store.saveReport({ ...report, outcome: { action, note: note.trim(), at } })
-      // A problem found wrong takes the answers given to it with it (docs/learner/design.md, A).
+      // A problem found wrong takes the answers given to it with it (docs/learner/design.md, 整理证据).
       this.ctx.learnCore.log.append({ type: 'problem.reviewed', at, nodeIds: problem.nodeIds, context: {}, problemId: problem.id, outcome: action, note: note.trim() })
       return saved
     })
@@ -741,7 +741,7 @@ export function apply(ctx: Context, config: Config): void {
     handle: ({ testId }) => must(assess.view(testId), 'assess', '测试', testId),
   }), 'assess: view')
 
-  // "考我一下" on a knowledge point (docs/learner/design.md, C); asking again returns the check still open.
+  // "考我一下" on a knowledge point (docs/learner/design.md, 说明、检查时间和"考我一下"); asking again returns the check still open.
   ctx.effect(() => endpoint({
     unit: 'assess',
     method: 'check',

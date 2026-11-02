@@ -1,4 +1,4 @@
-// Checks on the teacher's goal writes (docs/goal/design.md "A 批"). Errors stop the save and go back
+// Checks on the teacher's goal writes (docs/goal/design.md, 老师怎么写). Errors stop the save and go back
 // to the teacher as one list to fix; warnings ride along with a successful save. Fact sources are
 // checked by the service, which can see the library.
 import { CITATION_PATTERN, type GoalFrontmatter } from '@learning-agent/contracts'

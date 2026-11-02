@@ -1,4 +1,4 @@
-// Past papers as library parsed them (docs/assess/design.md, C): sections like "三、计算题（每题 15 分，
+// Past papers as library parsed them (docs/assess/design.md, 题从哪来): sections like "三、计算题（每题 15 分，
 // 共 45 分）" give the question type and points, numbered questions under them ("1." "2．") are the
 // problems, numbered `三-2`. A key after a "参考答案" heading gives the answers by the same numbers.
 // Reading the paper keeps the stems as printed instead of the teacher's copy, like textbook exercises.

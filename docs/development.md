@@ -5,7 +5,7 @@
 ## 构建与启动
 
 - 云端这类内存小的机器跑 `pnpm typecheck` 前先设 `NODE_OPTIONS=--max-old-space-size=8192`。
-- 学习数据默认在 `文档/学习库`。开发时 `.tools/dsh-env.sh` 把 `LEARNING_HOME` 设成仓库里的 `.data/`，并导出 `.env` 里的密钥。
+- 开发时 `.tools/dsh-env.sh` 把 `LEARNING_HOME` 设成仓库里的 `.data/`（学习数据默认在 `文档/学习库`），并导出 `.env` 里的密钥。
 - DSH 要从没有 `.env` 的目录启动：它会自动读取当前目录的 `.env`，却拒绝 `.env` 里的 `DEEPSEEK_BASE_URL`（只接受启动环境传入）。所以先 `. .tools/dsh-env.sh` 把变量导出到环境，再进 `.dsh-home/work` 启动，命令见 README。
 - 改了前端：`pnpm build` 后刷新页面。改了后端：`pnpm build` 后重启 DSH。改了 `packages/app/cordis.patch.yml` 也要重启。
 - 后台任务停止后 DSH 的 Node 进程可能还在：重启前按端口找到它，核对命令行含 `dsh … bin.js learning` 再结束。
@@ -36,9 +36,7 @@
 
 ## 在线服务和密钥
 
-- 资料解析默认把 PDF 上传到 MinerU 云端，语义检索用 Voyage AI（`library` 的设置项 `parser`、`semanticSearch`）。本机解析用 `pnpm mineru:start`，只监听 `127.0.0.1:16580`。
-- 联网找资料用 Exa、博查、Tavily（首选服务是设置项 `searchProvider`）。
-- 密钥（`MINERU_API_KEY`、`VOYAGEAI_API_KEY`、`EXA_API_KEY`、`BOCHA_API_KEY`、`TAVILY_API_KEY`）每次使用时按名称向 DSH 的密钥服务读取：启动环境（`dsh-env.sh` 导出的 `.env`）优先，其次是设置页保存在 `.dsh-home/.credentials.yaml` 里的。
+各服务的设置项和密钥名见 [library](library/design.md)"在线服务"和"数据与接口"，密钥的读取顺序见 [settings](settings/design.md)"设置存在哪、归谁"，本机 MinerU 怎么启动见 README。
 
 ## 测试
 
@@ -46,7 +44,7 @@
   - 单元测试放在 `packages/<单元>/test/`，测规则和纯函数的边界情况，不启动别的单元；
   - 跨单元测试放在 `tests/<单元>/<功能>.test.ts`，按功能命名、不按开发批次，从工具、页面接口或事件走到数据库和课程文件，不再逐个列边界情况。
 - `tests/` 顶层只放整个仓库的检查：最小学习流程（`flow.test.ts`）、文档、技能、包依赖、GIF 脚本。
-- 只把昂贵或不确定的部分换成假的（模型、网络、时钟、DSH），其余用真的。跨单元测试用 `tests/harness.ts`（假的只有 DSH 的传输、会话、智能体和模型），它给 `library` 传本机解析、关闭语义检索。解析、检索和联网搜索的单元测试用假的服务地址。
+- 只把昂贵或不确定的部分换成假的（模型、网络、时钟、DSH），其余用真的。跨单元测试用 `tests/harness.ts`（假的只有 DSH 的传输、会话、智能体和模型），它给 `library` 传本机解析、关闭语义检索；跨单元测试不调用 `searchWeb`。解析、检索和联网搜索的单元测试用假的服务地址。
 - 功能改了，同一次提交改它的测试；功能删了，测试一起删。生产代码里没人调用的函数不因为有测试而留着。测试共用一份准备、接着用前面的状态时，留在同一个文件里。
 - `pnpm coverage` 列出测试从没跑到的代码：先查有没有生产调用者，没有就删，有就是缺测试。不设覆盖率门槛。
 - 合成教材夹具放在 `tests/fixtures/`，用 `node tests/fixtures/build-middle.mjs <目录>` 从可读的 `source.md` 生成结构化结果。合成 PDF 和验收脚本放在 `.scratch/`。

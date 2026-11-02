@@ -1,4 +1,4 @@
-// Suggested checks (docs/planner/design.md, B). learner says from when a new problem answered alone adds evidence
+// Suggested checks (docs/planner/design.md, 复查). learner says from when a new problem answered alone adds evidence
 // (`checkFrom` of the course's state); the planner picks which of those to suggest now, a few a day across all
 // courses: a possible misconception first (learner's `doubt`, from a side chat or the teacher), then the longest-waiting. A suggestion is only words until the learner starts it, or asks the teacher
 // to: it creates nothing, and time passing writes nothing.

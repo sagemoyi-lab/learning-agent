@@ -65,7 +65,7 @@ export interface WebAdded {
 
 /**
  * A page read for one use without becoming a source (`readWeb`): the textbook quotes it by its address
- * (docs/textbook/design.md, 讲解与原文). Only HTML pages; a PDF needs parsing and goes through `addWeb`.
+ * (docs/textbook/design.md, 生成). Only HTML pages; a PDF needs parsing and goes through `addWeb`.
  */
 export type WebReading =
   | { readonly status: 'read'; readonly url: string; readonly title: string; readonly site: string; readonly authority: Source['authority']; readonly rule: string; readonly passages: readonly string[] }
@@ -538,7 +538,7 @@ export interface MockCoverage {
   readonly sections: readonly { readonly type: string; readonly wanted: number; readonly fresh: number }[]
 }
 
-/** A mock exam's result by section, scored like the real exam (docs/assess/design.md, C). */
+/** A mock exam's result by section, scored like the real exam (docs/assess/design.md, 模拟考). */
 export interface MockReport {
   readonly sections: readonly {
     readonly type: string
@@ -568,7 +568,7 @@ export interface ReadingDifference {
   readonly after: string
 }
 
-/** A problem's answer while the test is open, saved as the learner writes (docs/assess/design.md, C). */
+/** A problem's answer while the test is open, saved as the learner writes (docs/assess/design.md, 作答). */
 export interface AnswerDraft {
   readonly problemId: string
   readonly text: string
@@ -591,7 +591,7 @@ export interface DraftInput {
   readonly transcription?: { readonly text: string; readonly confirmed: boolean }
 }
 
-/** Where a diagnostic left each probed node (docs/assess/design.md, B). Only direct answers are evidence. */
+/** Where a diagnostic left each probed node (docs/assess/design.md, 摸底和前测). Only direct answers are evidence. */
 export type ProbeState = 'known' | 'boundary' | 'not-yet' | 'inferred' | 'unprobed'
 
 export interface Diagnosis {
@@ -752,7 +752,7 @@ export interface RoadmapResult {
   readonly revision?: RoadmapRevision
 }
 
-/** One core node in the facts of a stage review (docs/curriculum/design.md, A). */
+/** One core node in the facts of a stage review (docs/curriculum/design.md, 阶段复盘). */
 export interface ReviewNodeFacts {
   readonly nodeId: string
   readonly title: string
@@ -908,7 +908,7 @@ export interface LessonTextbookStatus {
   readonly draft?: string
 }
 
-/** Where a paragraph went when the lesson was revised or written again (docs/textbook/design.md, 局部修订). */
+/** Where a paragraph went when the lesson was revised or written again (docs/textbook/design.md, 修改). */
 export interface BlockRevision {
   readonly blockId: string
   /** The paragraphs it became: itself first when kept, none when removed. */
@@ -1052,7 +1052,7 @@ export interface LearnSidechat {
   /**
    * May this session use a tool now? Always for a session that is not a side chat. A side chat reads the course's
    * library (`search_library`, `read_section`) and nothing else, and not even that while a test of the course is open
-   * (docs/assess/design.md, 测试类型与独立性). Tools call it when they run, so an old session is held to today's rule.
+   * (docs/assess/design.md, 测试种类). Tools call it when they run, so an old session is held to today's rule.
    */
   checkTool(sessionId: string, tool: string): { readonly allowed: boolean; readonly reason?: string }
   /**
@@ -1080,11 +1080,11 @@ export interface LearnTutor {
   /**
    * Write the lesson record (`lessons/<n>.md`: quiz results, help in the lesson, states, the learner's report,
    * the summary) and mark the lesson done. Refused until the lesson's quiz is in and settled; with `sessionId`,
-   * the report must be the learner's own words from that session (docs/tutor/design.md, B).
+   * the report must be the learner's own words from that session (docs/tutor/design.md, 课时小结).
    */
   writeLessonSummary(lessonId: string, record: { readonly summary: string; readonly learnerReport: string; readonly sessionId?: string }, meta: ChangeMeta): Promise<void>
   /**
-   * Decide an open proposal of the course (docs/tutor/design.md, C): `applied` only after its targets were changed
+   * Decide an open proposal of the course (docs/tutor/design.md, 修改提案): `applied` only after its targets were changed
    * since it was made (those changes are recorded on it); `rejected` with the reason the learner reads.
    */
   decideProposal(courseId: string, proposalId: string, decision: 'applied' | 'rejected', note?: string): Proposal
@@ -1110,7 +1110,7 @@ export interface NextStep {
   readonly countdown?: Countdown
   /** Tests of the course left open besides the step itself (a "考我一下", practice, a mock exam): the learner can go back to them. */
   readonly unfinished?: readonly UnfinishedTest[]
-  /** A short check suggested now, beside the step (docs/planner/design.md, B): the learner may take it or leave it. */
+  /** A short check suggested now, beside the step (docs/planner/design.md, 复查): the learner may take it or leave it. */
   readonly review?: ReviewSuggestion
   /** Back after a break (the planner's setting, a week by default): when the learner last studied the course, and what. */
   readonly back?: { readonly days: number; readonly at: string; readonly last: string }

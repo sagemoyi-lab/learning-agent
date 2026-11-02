@@ -1,4 +1,4 @@
-// Proposals (docs/tutor/design.md, C): a change the learner asked for somewhere else than the teacher chat: an error
+// Proposals (docs/tutor/design.md, 修改提案): a change the learner asked for somewhere else than the teacher chat: an error
 // reported on the textbook (annotation), or a change drafted in a side chat and submitted by the learner (sidechat).
 // core keeps them; the teacher sees the open ones in the brief, checks them against the sources and decides. "Applied" needs a change to the target made after the proposal, so a
 // proposal is never marked done when the edit failed or was never made; "rejected" needs the reason the learner reads.

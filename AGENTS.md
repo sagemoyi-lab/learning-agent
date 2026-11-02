@@ -65,8 +65,8 @@
 - 密钥只存在 `.env`。不打印密钥、中转地址或本地 DSH 认证 token，也不写进文档或提交记录。
 - `.env`、`materials/`、`.tools/`、`.dsh-home/`、`.data/`、`.scratch/` 和构建产物不进 Git。教材和个人照片不是测试夹具；夹具用自己编写的合成资料（`tests/fixtures/`）。
 - 真实模型联调只用合成数据（用户已授权）。把真实教材发给模型、MinerU 或 Voyage 前先问用户，包括重启 3180（启动后会自动给真实教材建索引）。联网搜索验收只搜课程主题，加入的网上资料只放进 3182 的合成课程。
-- 自动测试不调用付费服务：harness 用本机解析、关闭语义检索，不调用 `searchWeb`（`.env` 导出到环境时会用真实密钥）。
-- 端口：3180 日常开发（`.data/`），3182 验收（`.scratch/smoke-data/`，只有合成数据，各助手共用），3184 规模测量（`.scratch/perf-data/`，测完停掉）。只结束命令行含 `dsh … bin.js learning` 的进程。
-- 3180 和 3182 共用一份 DSH profile 和密钥文件：在 3182 上验收设置或密钥前先备份，验收完还原。
+- 自动测试不调用付费服务（`.env` 导出到环境时会用真实密钥），做法见 [development.md](docs/development.md)"测试"。
+- 端口分开用：3180 日常开发，3182 验收（只放合成数据，各助手共用），3184 规模测量（测完停掉）；数据目录见 [development.md](docs/development.md)"三个端口"。只结束命令行含 `dsh … bin.js learning` 的进程。
+- 3180 和 3182 共用一份 DSH profile 和密钥文件：在 3182 上验收设置或密钥前先备份，验收完还原（做法见 development.md"profile 和组合包"）。
 - 没有改依赖时 `pnpm-lock.yaml` 不该变；变了先用 `git checkout pnpm-lock.yaml` 还原再提交，原因见 [development.md](docs/development.md)"profile 和组合包"。
 - 用 shell 的 heredoc 或单行脚本写含反斜杠的代码（正则、LaTeX）时，反斜杠可能被吞掉：写完核对，或者改用直接写文件的工具。

@@ -45,7 +45,7 @@ export const ProblemOrigin = z.discriminatedUnion('kind', [
 export const ProblemSize = z.enum(['check', 'standard', 'task'])
 export type ProblemSize = z.infer<typeof ProblemSize>
 
-/** The calculator run that produced or checked the answer (docs/assess/design.md, A). */
+/** The calculator run that produced or checked the answer (docs/assess/design.md, 题从哪来). */
 export const Calculation = z.object({
   script: z.string(),
   /** Variables holding the answer, one per part. */
@@ -78,7 +78,7 @@ export const Problem = z.object({
   type: z.string().optional(),
   /** Points the source paper gives the problem. */
   points: z.number().nonnegative().optional(),
-  /** Past-paper problems: the paper's title (docs/assess/design.md, C). */
+  /** Past-paper problems: the paper's title (docs/assess/design.md, 题从哪来). */
   paper: z.string().optional(),
   calculation: Calculation.optional(),
   nodeIds: z.array(idOf('node')).min(1),
@@ -110,7 +110,7 @@ export const ProbeNode = z.object({
 })
 export type ProbeNode = z.infer<typeof ProbeNode>
 
-/** What a stage test was assembled from (docs/assess/design.md, B); results are given per core node. */
+/** What a stage test was assembled from (docs/assess/design.md, 阶段测试和结课检验); results are given per core node. */
 export const StagePlan = z.object({
   core: z.array(ProbeNode),
   earlier: z.array(ProbeNode).default([]),
@@ -124,7 +124,7 @@ export const StagePlan = z.object({
 })
 export type StagePlan = z.infer<typeof StagePlan>
 
-/** What a mock exam was assembled from: the exam's question types, each with its problems (docs/assess/design.md, C). */
+/** What a mock exam was assembled from: the exam's question types, each with its problems (docs/assess/design.md, 模拟考). */
 export const MockPaper = z.object({
   /** The exam's in-scope nodes when the test started; wrong answers are reported by them. */
   nodes: z.array(ProbeNode).default([]),
@@ -243,7 +243,7 @@ export const Grading = z.object({
 })
 export type Grading = z.infer<typeof Grading>
 
-/** Why the learner flagged a problem during a test (docs/assess/design.md, B). */
+/** Why the learner flagged a problem during a test (docs/assess/design.md, 这题有问题、申诉和改判). */
 export const ReportReason = z.enum(['wrong', 'incomplete', 'out-of-scope', 'answer-doubtful', 'done-before'])
 export type ReportReason = z.infer<typeof ReportReason>
 

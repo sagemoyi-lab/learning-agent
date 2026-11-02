@@ -1,4 +1,4 @@
-// Stage reviews (docs/curriculum/design.md, A): the facts the program reads for each core node and its
+// Stage reviews (docs/curriculum/design.md, 阶段复盘): the facts the program reads for each core node and its
 // default recommendation. Pure; tools.ts gathers the inputs from assess, learner and knowledge.
 import type { CarriedNode, MasteryState, NodeOutcome, ReviewChoice, ReviewNodeFacts, ReviewResult, Stage, StageReviewFacts, TestView, Verdict } from '@learning-agent/contracts'
 

@@ -1,4 +1,4 @@
-// The course's main line (docs/planner/design.md, A): from the other units' state, the one step the course is
+// The course's main line (docs/planner/design.md, 下一步): from the other units' state, the one step the course is
 // at and who takes it, walking the learning journey in order. Read-only: working out a step never publishes,
 // generates or wakes anything.
 import type { Context } from '@deepseek-ai/cordis'

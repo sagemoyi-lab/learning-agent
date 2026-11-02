@@ -1,4 +1,4 @@
-// Source text copied into a lesson as it is (docs/textbook/design.md, 讲解与原文). The writer names chunks with
+// Source text copied into a lesson as it is (docs/textbook/design.md, 一份讲义). The writer names chunks with
 // `![[ck_…]]` or `![[ck_…..ck_…]]` on a line of its own; the program puts the chunks' own text in an Obsidian
 // quote box headed by its citation. A worked example's solution comes as a box of its own, folded.
 import type { CitedChunk } from '@learning-agent/contracts'

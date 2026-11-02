@@ -1,4 +1,4 @@
-// Local revision of a handout (docs/textbook/design.md, 局部修订): the model rewrites only the paragraphs
+// Local revision of a handout (docs/textbook/design.md, 修改): the model rewrites only the paragraphs
 // named, the program puts them back in place; the learner's own edits go the same way without a model. A
 // rewritten paragraph keeps its id, extra paragraphs get new ones, a removed paragraph is recorded with where
 // it went. Quote boxes of source text are never rewritten. Pure helpers; the call is in index.ts.

@@ -50,7 +50,7 @@ export const ChangeTarget = z.discriminatedUnion('kind', [
 export type ChangeTarget = z.infer<typeof ChangeTarget>
 
 /**
- * A change the side chat drafted from what the learner asked for (docs/sidechat/design.md, C). Only a draft: it reaches
+ * A change the side chat drafted from what the learner asked for (docs/sidechat/design.md, 修改建议). Only a draft: it reaches
  * the teacher as a proposal when the learner submits it. Owner: sidechat.
  */
 export const SideChatDraft = z.object({

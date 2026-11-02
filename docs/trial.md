@@ -5,10 +5,9 @@
 ## 试用前
 
 - 3180 要重新构建并重启 DSH，才能看到最近的改动（重启时可能自动给真实教材建索引，助手会先问你）。旧库会在启动时升级。
-- 3180 和 3182 共用同一份设置和密钥。
 - 拉取 11-01 的 profile 清理前，先 `git checkout pnpm-lock.yaml`；拉取后运行一次 `sh scripts/dev-profile.sh`，给 profile 加上它自己的 `pnpm-workspace.yaml`。之后 DSH 启动和装插件不再改仓库的锁文件。
 - 3182 上有合成验收课程："knowledge C 合成验收""goal A 合成验收""goal B 合成验收""goal 卡片验收""assess A 合成验收""assess B 合成验收""assess C 合成验收""curriculum A 合成验收""curriculum C 合成验收"。
-- 用真实教材时，会发往在线服务的有：写讲义会把教材片段发给 DeepSeek；联网补讲和联网找资料会把要找的内容发给搜索服务；按小节抽取会把那一节原文发给 DeepSeek；拍照作答会把照片发给 DeepSeek。
+- 用真实教材时，哪些内容会发往哪个在线服务，见设置页"数据与隐私"和 [library](library/design.md)"在线服务"。
 
 ## 外壳
 
@@ -125,5 +124,4 @@
 
 ## 设置
 
-- 3180 要重新构建、运行一次 `sh scripts/dev-profile.sh`、再重启 DSH。
 - 模型服务卡片底部的"高级设置"里，选一个模型改上下文窗口、最大输出（可以写 128K、1M）和思考档位，保存后看"默认模型"旁的思考强度选项跟着变。DeepSeek 卡片里可以设"不支持思考"（中转站不支持时用）。

@@ -1,4 +1,4 @@
-// The mastery rules (docs/learner/design.md, 验收标准 A and B) on hand-written synthetic logs.
+// The mastery rules (docs/learner/design.md, 怎么运作) on hand-written synthetic logs.
 import { describe, expect, it } from 'vitest'
 import { newId, type Grading, type LogEntry, type TestConditions, type Verdict } from '@learning-agent/contracts'
 import { deriveState, judge } from '../src/rules.ts'

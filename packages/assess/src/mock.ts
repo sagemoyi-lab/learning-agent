@@ -1,4 +1,4 @@
-// Mock exams (docs/assess/design.md, C): assembled from new reserved problems by the exam's question
+// Mock exams (docs/assess/design.md, 模拟考): assembled from new reserved problems by the exam's question
 // types, scored like the real exam, section by section. Pure functions: the store feeds them problems.
 import type { Grading, MockPaper, MockReport, MockSection, Problem, ProbeNode } from '@learning-agent/contracts'
 import { answerParts } from './grading.ts'

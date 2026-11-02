@@ -1,8 +1,8 @@
-// "考我一下" (docs/learner/design.md, C): the learner asks to be checked on one knowledge point. One practice
+// "考我一下" (docs/learner/design.md, 说明、检查时间和"考我一下"): the learner asks to be checked on one knowledge point. One practice
 // problem the learner has not met is published as a one-problem 复查 test (marked `check`), under the course's
 // conditions for reviews; while it is open the teacher does not discuss it (tutor's classroom rule), and handing
 // it in goes back to the teacher like any test. Mastery still comes only from the graded answer. The planner
-// suggests checks too (docs/planner/design.md, B), and the teacher can start one; all go through here.
+// suggests checks too (docs/planner/design.md, 复查), and the teacher can start one; all go through here.
 import type { Context } from '@deepseek-ai/cordis'
 import { LearningApiError, type Problem, type Task, type Test } from '@learning-agent/contracts'
 import type { AssessStore } from './store.ts'

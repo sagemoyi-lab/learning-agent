@@ -1,4 +1,4 @@
-// assess C's pure parts (docs/assess/design.md, C): comparing two readings of a photo answer, reading a
+// assess's pure parts for photos and past papers (docs/assess/design.md: 作答, 题从哪来): comparing two readings of a photo answer, reading a
 // past paper by its sections and numbers, and assembling and scoring a mock exam by question type.
 import { describe, expect, it } from 'vitest'
 import type { CitedChunk, Grading, MockPaper, Problem, ProbeNode } from '@learning-agent/contracts'

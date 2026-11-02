@@ -1,4 +1,4 @@
-// The rules of tests by rule (docs/assess/design.md, B): probing along the prerequisites, the diagnosis,
+// The rules of tests by rule (docs/assess/design.md: 摸底和前测, 阶段测试和结课检验): probing along the prerequisites, the diagnosis,
 // stage-test assembly and the per-node report, and rubric points.
 import { describe, expect, it } from 'vitest'
 import type { Problem, ProbeNode } from '@learning-agent/contracts'

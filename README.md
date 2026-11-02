@@ -41,7 +41,7 @@
 
 需要：Node 24、pnpm 11，`.env` 里有模型和搜索服务的 key。DSH 版本锁定 `0.2.0-rc.2`，由 `scripts/setup-dsh.sh` 装到 `.tools/dsh`。
 
-学习数据默认放在 `文档/学习库`；开发时 `.tools/dsh-env.sh` 把 `LEARNING_HOME` 设成仓库里的 `.data/`（不进 git）。
+学习数据默认放在 `文档/学习库`，开发时在仓库的 `.data/`（不进 git，见 [development.md](docs/development.md)）。
 
 ```bash
 pnpm install
@@ -58,19 +58,11 @@ sh scripts/dev-profile.sh   # 安装 learning profile（已有的不覆盖），
 . .tools/dsh-env.sh && cd .dsh-home/work && dsh learning --no-open --port 3180
 ```
 
-验收时用只有合成数据的独立目录和端口，不碰日常数据：
-
-```bash
-. .tools/dsh-env.sh && export LEARNING_HOME="$PWD/.scratch/smoke-data" && cd .dsh-home/work && dsh learning --no-open --port 3182
-```
-
-改了前端代码：重新 `pnpm build` 后刷新页面。改了后端代码：重新构建并重启 DSH（结束占用端口的那个 `dsh … learning` 进程）。
+验收用的端口和数据目录、改了代码后怎么重新构建和重启，见 [development.md](docs/development.md)。
 
 ## 设置和在线服务
 
-侧栏左下角的齿轮打开设置页：各角色用哪个模型、模型服务、资料服务（PDF 解析、语义检索、联网搜索）、外观、数据与隐私、插件，保存后立即生效（见 [settings](docs/settings/design.md)）。
-
-在线服务的密钥可以在设置页填写，也可以写进 `.env`：`MINERU_API_KEY`（在 mineru.net 的 API 管理页申请）、`VOYAGEAI_API_KEY`、`EXA_API_KEY`、`BOCHA_API_KEY`、`TAVILY_API_KEY`。每个服务做什么、会发出去什么，见 [library](docs/library/design.md)"在线服务"。
+侧栏左下角的齿轮打开设置页（见 [settings](docs/settings/design.md)）。在线服务的密钥可以在设置页填，也可以写进 `.env`；各服务的密钥名、做什么、会发出去什么，见 [library](docs/library/design.md)"在线服务"和"数据与接口"。MinerU 的密钥在 mineru.net 的 API 管理页申请。
 
 PDF 默认用 MinerU 云端解析。要在本机解析（设置 › 资料服务 › 解析方式选本机），先准备好 `.tools/mineru` 里的 MinerU 4.0.10 和下载好的模型，再在仓库根目录的 PowerShell 运行：
 

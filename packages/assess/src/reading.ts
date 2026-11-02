@@ -1,4 +1,4 @@
-// Handwriting photos read by a vision model (docs/assess/design.md, C). Three safeguards from stage 0
+// Handwriting photos read by a vision model (docs/assess/design.md, 作答). Three safeguards from stage 0
 // (V9): the stem is never read from the photo (the program states it), every photo set is read twice and
 // the differences are shown, and the learner confirms the reading before it is graded.
 import { Recognition, type ReadingDifference } from '@learning-agent/contracts'

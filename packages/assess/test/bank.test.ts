@@ -1,4 +1,4 @@
-// The pieces of a trustworthy bank (docs/assess/design.md, A): reading printed answers, units in
+// The pieces of a trustworthy bank (docs/assess/design.md, 题从哪来): reading printed answers, units in
 // numeric grading, the restricted calculator, expression equivalence and exercise numbers.
 import { describe, expect, it } from 'vitest'
 import type { CitedChunk } from '@learning-agent/contracts'

@@ -1,4 +1,4 @@
-// The rules of tabs (docs/shell/design.md "10-12 试用后的改版"): where `openPage` puts a page, each tab's
+// The rules of tabs (docs/shell/design.md, 布局): where `openPage` puts a page, each tab's
 // back/forward history, which pages stay mounted, and the recently opened list. Pure, so they are tested
 // without dockview; the shell keeps one `Tab` in each dockview panel's params, saved with the layout.
 

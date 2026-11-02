@@ -1,4 +1,4 @@
-// "照现在的节奏能不能赶上" (docs/planner/design.md, C): from how long the stages already done took, a range for the
+// "照现在的节奏能不能赶上" (docs/planner/design.md, 能不能赶上): from how long the stages already done took, a range for the
 // rest, set against the days left. A rough reading of the learner's own pace, said as such: no chance of passing,
 // no exact finishing date, and nothing until a stage is done.
 import type { Lesson, Pace, Stage } from '@learning-agent/contracts'

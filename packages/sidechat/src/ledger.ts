@@ -1,4 +1,4 @@
-// sidechat unit: the record of a side chat (docs/sidechat/design.md, B). After each reply, what was said since the last
+// sidechat unit: the record of a side chat (docs/sidechat/design.md, 每轮记账). After each reply, what was said since the last
 // record is sorted by a one-shot model (the 侧边会话总结 role) into the learner's questions, what was concluded, the
 // help given and possible misconceptions. The program keeps only what it can check (knowledge points and problems
 // from the lists it gave, the learner's words found in the learner's messages, replies that exist), logs the help

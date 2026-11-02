@@ -45,7 +45,7 @@ const TASK_KIND_LABEL: Record<Task['kind'], string> = {
 
 /**
  * A pass mark on the total ("正确率 ≥ 80%", "做对 80% 以上"): stage tests judge each core node instead
- * (docs/assess/design.md, B), so a design or roadmap promising one would mislead the learner.
+ * (docs/assess/design.md, 阶段测试和结课检验), so a design or roadmap promising one would mislead the learner.
  */
 const PASS_MARK = /过关线|及格线|合格线|(?:做对|答对|正确率|得分率?)[^。；\n]{0,12}?\d+\s*[%％]/
 

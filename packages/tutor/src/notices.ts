@@ -1,4 +1,4 @@
-// tutor unit: the hand-back queue (docs/tutor/design.md, A). A handoff is stored first, merged per
+// tutor unit: the hand-back queue (docs/tutor/design.md, 进度通知). A handoff is stored first, merged per
 // course for a short window, and marked sent only once DSH holds it. A failed delivery is retried a
 // few times; what a restart interrupted is sent again. Whether the teacher acts is decided when the
 // notice goes out, from the planner's next step then.

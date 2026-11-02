@@ -1,4 +1,4 @@
-// When the learner last studied a course, and what that was (docs/planner/design.md, C): answers, what the
+// When the learner last studied a course, and what that was (docs/planner/design.md, 回来以后): answers, what the
 // learner said in the conversation, tasks done. Background jobs, the teacher's notices, help the teacher gave
 // (a teacher woken by a notice may explain to nobody) and opening a page are not studying. Read from the
 // evidence log and the tasks; nothing is stored.

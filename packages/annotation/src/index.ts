@@ -458,7 +458,7 @@ export function apply(ctx: Context): void {
       const chunk = ctx.learnLibrary.chunk(annotation.anchor.chunkId)
       if (chunk) parts.push(`所在资料片段（${chunk.citation}）：\n${plainText(chunk.text)}`)
     }
-    // Feedback on an explanation: one or two concrete gaps against the sources, never a grade (docs/annotation/design.md, B).
+    // Feedback on an explanation: one or two concrete gaps against the sources, never a grade (docs/annotation/design.md, 怎么运作).
     if (annotation.type === 'understanding') {
       parts.push('学习者请你看看这条理解：先说哪些地方和资料一致（写出处），再指出最要紧的一两处缺的条件或和资料不一致的地方，问一个能让学习者自己补上的问题；不要整段重讲，不要打分，也不要说已经掌握。资料里没有的，直接说没有找到。')
     }

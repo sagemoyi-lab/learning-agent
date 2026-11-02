@@ -68,7 +68,7 @@ export const assessMigrations: Migration[] = [
     `,
   },
   {
-    // One problem per source exercise (docs/assess/design.md, A). Banks written before that may hold an
+    // One problem per source exercise (docs/assess/design.md, 题从哪来). Banks written before that may hold an
     // exercise twice, one copy per pool: the copy with answers stays, otherwise the older one; the
     // rest are retired, so a reserved copy never passes as new after the practice copy was answered.
     version: 2,
@@ -95,7 +95,7 @@ export const assessMigrations: Migration[] = [
     `,
   },
   {
-    // Flagged problems and appeals (docs/assess/design.md, B): bank records with the teacher's outcome.
+    // Flagged problems and appeals (docs/assess/design.md, 这题有问题、申诉和改判): bank records with the teacher's outcome.
     // The evidence log gets `problem.reported` and `attempt.regraded`; these tables are what the pages show.
     version: 3,
     sql: `
@@ -122,7 +122,7 @@ export const assessMigrations: Migration[] = [
     `,
   },
   {
-    // Answers in progress (docs/assess/design.md, C): kept while the test is open, so leaving the page,
+    // Answers in progress (docs/assess/design.md, 作答): kept while the test is open, so leaving the page,
     // reloading or restarting loses nothing; dropped when the test closes (the attempts keep the answers).
     version: 4,
     sql: `
@@ -150,7 +150,7 @@ function minutesBetween(from: string | undefined, to: string | undefined): numbe
   return from && to ? Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / 60_000)) : undefined
 }
 
-/** How many problems a test may swap (docs/assess/design.md, B); diagnostics ask the next one instead. */
+/** How many problems a test may swap (docs/assess/design.md, 测试种类); diagnostics ask the next one instead. */
 const SWAP_LIMIT: Record<Test['kind'], number> = { diagnostic: 0, pretest: 0, quiz: 1, practice: 1, review: 1, stage: 2, mock: 2, final: 2 }
 
 const DEFAULT_CONDITIONS = { book: 'closed', calculator: true, formulaSheet: false } as const

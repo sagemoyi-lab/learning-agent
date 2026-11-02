@@ -1,4 +1,4 @@
-// Embedding and reranking service for hybrid retrieval (docs/library/research.md, batch B).
+// Embedding and reranking service for hybrid retrieval (docs/library/design.md, 检索).
 // Voyage AI today; the index records the model, so a different provider builds its own vectors.
 
 export interface Ranked { readonly index: number; readonly score: number }

@@ -94,7 +94,7 @@ class LearnTutorService extends Service implements LearnTutor {
   }
 
   /**
-   * Checked where it happens (docs/tutor/design.md, B): the lesson is this course's, its quiz is in and
+   * Checked where it happens (docs/tutor/design.md, 课时小结): the lesson is this course's, its quiz is in and
    * graded, and the learner's report is their own words from the session. The record's facts come from
    * the program: the quiz problem by problem, the help logged in this lesson, the states as they are now.
    */
@@ -201,7 +201,7 @@ export const Config = Schema.object({
   /** How long to wait for related handoffs before telling the teacher. */
   handoffDelayMs: Schema.number().min(0).default(HANDOFF_DELAY_MS),
   model: roleModel('主老师'),
-  /** Sorts each teacher turn into help given and what the learner said (docs/tutor/design.md, B). */
+  /** Sorts each teacher turn into help given and what the learner said (docs/tutor/design.md, 课堂记录). */
   ledgerModel: roleModel('课堂记录'),
 })
 export type Config = ReturnType<typeof Config>
