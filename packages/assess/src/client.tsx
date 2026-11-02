@@ -9,6 +9,7 @@ import {
   type AnswerDraft, type AnswerInput, type BankOverview, type CourseGraph, type Diagnosis, type HomeworkMark, type Lesson, type MockReport, type NodeOutcome, type ProbeState, type ReportReason, type Stage, type StageReport, type Test, type TestView, type Verdict,
 } from '@learning-agent/contracts'
 import type { ClientContext, LearningPageProps, LearnShell, ShellScope } from '@learning-agent/contracts/client'
+import { SaveQueue } from './save-queue.ts'
 import {
   Button, Callout, Checkbox, ConfirmButton, Disclosure, EmptyState, ErrorText, Page, PageHeader, PickButton, Progress, Section, Select, Skeleton, Tag, TextArea, TextField, friendlyTime, useAction, useLoad, useSelection, type Tone,
 } from '@learning-agent/kit/client'
@@ -683,6 +684,11 @@ function TestPage({ scope, params }: LearningPageProps): ReactNode {
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   /** Answers typed but not saved yet, by problem. */
   const unsaved = useRef(new Map<string, Draft>())
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
+  const queue = useRef<SaveQueue<Draft>>()
+  if (!queue.current) queue.current = new SaveQueue((problemId, draft) => saveDraft(testId, problemId, draft), (problemId, error) => {
+    setSaveErrors(previous => ({ ...previous, [problemId]: error ? '没保存上，输入仍保留，请重试' : '' }))
+  })
   const drafts = view.data?.drafts
   useEffect(() => {
     if (!drafts) return
@@ -693,7 +699,7 @@ function TestPage({ scope, params }: LearningPageProps): ReactNode {
   // Leaving the page (another page in this tab, or closing it) saves what was typed in the last moment.
   useEffect(() => () => {
     for (const timer of timers.current.values()) clearTimeout(timer)
-    for (const [problemId, draft] of unsaved.current) void saveDraft(testId, problemId, draft)
+    void queue.current!.flushAll().catch(() => { /* dirty revisions retained by the queue */ })
   }, [testId])
   if (view.error) return <Page width="reading"><ErrorText error={view.error} /></Page>
   if (!view.data) return <Page width="reading"><Skeleton lines={5} title /></Page>
@@ -710,21 +716,20 @@ function TestPage({ scope, params }: LearningPageProps): ReactNode {
   const unconfirmed = problems.flatMap((problem, index) => (photosOf(problem.id) && !draftOf(problem.id).gaveUp && !draftOf(problem.id).transcription?.confirmed ? [index + 1] : []))
 
   const store = (problemId: string, draft: Draft) => {
-    unsaved.current.delete(problemId)
-    return saveDraft(testId, problemId, draft)
+    return queue.current!.flush(problemId).then(() => { if (unsaved.current.get(problemId) === draft) unsaved.current.delete(problemId) })
   }
   /** Every change is saved shortly after typing stops; confirming a reading is saved at once. */
   const change = (problemId: string, next: Draft, now = false) => {
     setAnswers(previous => ({ ...previous, [problemId]: next }))
     clearTimeout(timers.current.get(problemId))
     unsaved.current.set(problemId, next)
+    queue.current!.put(problemId, next)
     timers.current.set(problemId, setTimeout(() => {
       timers.current.delete(problemId)
-      void store(problemId, next)
+      void store(problemId, next).catch(() => { /* shown beside the answer; retry retains revision */ })
     }, now ? 0 : 600))
   }
   const flush = async (problemId: string) => {
-    if (!timers.current.has(problemId)) return
     clearTimeout(timers.current.get(problemId))
     timers.current.delete(problemId)
     await store(problemId, draftOf(problemId))
@@ -740,7 +745,9 @@ function TestPage({ scope, params }: LearningPageProps): ReactNode {
   }
   // Problems not touched on this page are handed in from the saved copy (e.g. when time ran out away from it).
   const handIn = () => void submit.run(async () => {
-    await Promise.all([...timers.current.keys()].map(flush))
+    for (const timer of timers.current.values()) clearTimeout(timer)
+    timers.current.clear()
+    await queue.current!.flushAll()
     await shell.call('assess', 'submit', { testId, answers: problems.filter(problem => answers[problem.id]).map(answerOf) })
     view.reload()
   })
@@ -755,6 +762,7 @@ function TestPage({ scope, params }: LearningPageProps): ReactNode {
     <>
       {reportPanel(problem)}
       <AnswerBoxes problem={problem} index={index} draft={draftOf(problem.id)} busy={submit.busy} canGiveUp={canGiveUp} photos={photosOf(problem.id) > 0} onChange={next => change(problem.id, next)} />
+      {saveErrors[problem.id] && <Callout tone="bad" title="作答没保存上" actions={<Button size="sm" onClick={() => void flush(problem.id).catch(() => {})}>重试保存</Button>}>{saveErrors[problem.id]}</Callout>}
       <PhotoAnswer testId={testId} problem={problem} draft={draftOf(problem.id)} saved={saved[problem.id]} onChange={next => change(problem.id, next, next.transcription?.confirmed)} onServer={fromServer} onFlush={() => flush(problem.id)} />
     </>
   )
@@ -887,9 +895,9 @@ function TestPage({ scope, params }: LearningPageProps): ReactNode {
   )
 }
 
-/** Save one answer in progress (best effort: the next change saves it again, handing in sends what the page has). */
+/** Save one revision; failures must reach the queue, never silently count as saved. */
 function saveDraft(testId: string, problemId: string, draft: Draft): Promise<unknown> {
-  return shell.call('assess', 'draft', { testId, draft: { problemId, text: draft.text, finals: draft.finals, ...(draft.gaveUp ? { gaveUp: true } : {}), ...(draft.transcription ? { transcription: draft.transcription } : {}) } }).catch(() => {})
+  return shell.call('assess', 'draft', { testId, draft: { problemId, text: draft.text, finals: draft.finals, ...(draft.gaveUp ? { gaveUp: true } : {}), ...(draft.transcription ? { transcription: draft.transcription } : {}) } })
 }
 
 function useTests(courseId: string) {
