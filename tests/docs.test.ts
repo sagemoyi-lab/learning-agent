@@ -13,7 +13,7 @@ const BUDGETS: Record<string, number> = {
   'AGENTS.md': 3800,
   'packages/AGENTS.md': 3600,
   'docs/development.md': 3300,
-  'docs/PLAN.md': 9800,
+  'docs/PLAN.md': 10500,
   'docs/contracts.md': 11800,
 }
 

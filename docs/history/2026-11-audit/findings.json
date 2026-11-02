@@ -1,0 +1,2005 @@
+{
+  "repository": "https://github.com/sagemoyi/learning-agent",
+  "commit": "cb62c7aef96be1f15b5206bf2dc600c2cb636d85",
+  "date": "2026-11-02",
+  "counts": {
+    "P1": 19,
+    "P2": 28,
+    "P3": 1
+  },
+  "findings": [
+    {
+      "id": "DATA-01",
+      "severity": "P1",
+      "confidence": "已通过注入提交失败复现",
+      "title": "文件替换与 SQLite 提交不具备真正的跨资源原子性",
+      "evidence": [
+        {
+          "file": "packages/core/src/store.ts",
+          "lines": "152-180",
+          "detail": "commitFile先在事务内写变更和指纹，再writeFileSync+renameSync；之后外层事务才COMMIT。"
+        },
+        {
+          "file": "packages/core/src/db.ts",
+          "lines": "55-70",
+          "detail": "COMMIT失败只ROLLBACK数据库，不恢复已替换的文件。"
+        }
+      ],
+      "cause": "数据库事务无法回滚文件系统操作；源码注释声称与数据库原子提交，但实际存在文件已替换、数据库未提交的窗口。没有提交意图日志、崩溃恢复协议或文件/目录fsync。",
+      "impact": "遇到磁盘、提交或进程中断故障时，API可报告失败但文件已经改变，审计日志仍是旧内容；下次读取又可能把系统写入误记成用户外部编辑。用户据失败提示重试会进一步混淆版本。当前复现是可控的COMMIT异常注入，未模拟真实硬件断电。",
+      "repro": "audit/root/data-and-textbook.test.ts R01：保存OLD，注入一次COMMIT异常，再写NEW；操作拒绝后磁盘为NEW，最新已提交change.after仍为OLD。",
+      "fix": "选择明确的持久化协议：优先把待发布版本及写入意图先持久化于SQLite，在同一事务记录状态，写临时文件并同步后替换，完成后标记published；启动时按内容hash修复未完成步骤。若Markdown继续是真相，至少增加可恢复写前日志与补偿，避免宣称跨资源原子性。",
+      "acceptance": [
+        "对写临时文件、替换、COMMIT、事件发送前后逐点注入失败和进程中断，重启后文件、版本、hash和审计记录一致。",
+        "失败结果不得悄悄留下未记账的成功；恢复不得把系统失败写入归给用户。",
+        "验证Windows文件占用与SQLite WAL备份恢复。"
+      ]
+    },
+    {
+      "id": "DATA-02",
+      "severity": "P1",
+      "confidence": "已通过合成恢复流程复现",
+      "title": "恢复讲义生成时重新取基准版本 会覆盖停机期间的外部编辑",
+      "evidence": [
+        {
+          "file": "packages/textbook/src/index.ts",
+          "lines": "157-185,813-828,1072-1084,1115-1122",
+          "detail": "Run不保存初始文件hash；每次writeStage重读before，最后以本次before.hash作为CAS，resume重用同一run的parts。"
+        }
+      ],
+      "cause": "正在运行的一次生成有乐观锁，但跨重启后丢失最初的编辑基准。恢复把最新外部修改误当作允许覆盖的起点。",
+      "impact": "用户在应用中断后用Obsidian或其他编辑器补写的笔记，会被恢复的后台生成覆盖。变更日志可能保留该文本，因此不能等同不可恢复删除，但用户没有收到预期的冲突阻止。",
+      "repro": "R05：先生成讲义；让下一次生成中断并模拟running持久态；关闭harness、外部写入独特笔记、重启；恢复状态ready且独特笔记从当前文件消失。使用与仓库恢复测试类似的状态注入，未声称真实SIGKILL测试。",
+      "fix": "在生成开始时持久化baseHash/baseVersion和baseText引用，所有重试与恢复沿用同一基准。发现不一致时保留生成草稿，交给用户查看差异、选择合并或替换；如用户显式重新生成，应建立新run并重新确认基准。",
+      "acceptance": [
+        "恢复过程中遇到外部改动时进入conflict，原文件逐字保留，生成结果仍可获取。",
+        "停机期间未改动则复用已完成回复，不新增重复模型调用。",
+        "覆盖不存在文件、已有讲义、删除文件、并发外部编辑四类情况。"
+      ],
+      "notes": "范围限定为尚未完成发布的run恢复：已发布且文件run标识与恢复记录相同时，index.ts822–824会补索引/状态并保留当前文件，因此不是所有启动恢复都会覆盖。"
+    },
+    {
+      "id": "DATA-03",
+      "severity": "P1",
+      "confidence": "已通过两个客户端视图顺序保存复现",
+      "title": "段落编辑接口没有携带打开编辑器时的版本",
+      "evidence": [
+        {
+          "file": "packages/textbook/src/index.ts",
+          "lines": "479-483,492-520",
+          "detail": "blockSource只返回text；editBlock先读当前文件，再用当前hash进行内部CAS，无法发现客户端已经基于旧内容编辑。"
+        }
+      ],
+      "cause": "CAS保护的是服务端一次处理期间的修改，缺少从读取编辑表单到提交之间的端到端版本条件。",
+      "impact": "两个标签页/窗口，或页面编辑与Obsidian编辑先后保存同一段，后保存者会静默覆盖前者；单用户也可以触发。",
+      "repro": "R04：两个客户端先读取同一段，甲保存重要笔记，乙基于原内容保存；两次都成功，甲内容从现版消失。",
+      "fix": "blockSource返回blockHash和fileVersion，提交必须携带expectedBlockHash；后端不匹配则返回包含base/current/submitted的冲突信息，保留用户输入。优先做段落级合并，避免其他段落变化造成不必要整份冲突。",
+      "acceptance": [
+        "同段第二份陈旧提交被拒绝且用户草稿仍在；不同段可安全合并。",
+        "刷新、外部编辑、重生成后的旧编辑器均不能悄悄覆盖新版本。"
+      ],
+      "notes": "复现通过两个客户端读取视图和真实服务提交模拟，未做两个真实浏览器窗口操作；当前变更历史通常仍可用于人工恢复。"
+    },
+    {
+      "id": "AI-01",
+      "severity": "P1",
+      "confidence": "已通过纯函数反例复现",
+      "title": "讲义公式比对删掉上下标符号 会漏掉改变数学含义的错误",
+      "evidence": [
+        {
+          "file": "packages/textbook/src/check.ts",
+          "lines": "85-93,95-119",
+          "detail": "bareTex移除^、_和花括号；precheck按规范化字符串子串判断公式是否来自资料。"
+        }
+      ],
+      "cause": "把数学结构当作排版差异删除，产生非等价表达式碰撞；纯字符串包含关系不能证明公式结构未变。",
+      "impact": "如压强下标p_2被写成平方p^2，检测仍可通过。此项不同于不做逐句语义复核的既定取舍，它直接削弱已有的“公式必须与原文一致”程序保证。",
+      "repro": "R02：原式$p_2=p_1+\\rho gh$与生成式$p^2=p^1+\\rho gh$均变成p2=p1+ρgh，precheck返回undefined。",
+      "fix": "只消除可证明不影响意义的排版差异，保留上下标、分组、分数与运算符；优先从来源公式对象直接引用。必须比较时使用保持结构的LaTeX解析树/受限规范化，解析失败转待核实，不将字符串碰撞视为通过。",
+      "acceptance": [
+        "上下标互换、分母分组、负号、绝对值、分段条件改变均不能通过。",
+        "空格、\\left/\\right和等价排版可通过，数学语义保持。"
+      ]
+    },
+    {
+      "id": "AI-02",
+      "severity": "P2",
+      "confidence": "完整服务复现；来源完整性与产品政策建议",
+      "title": "事实段落缺引用时，没有主动标识来源缺口",
+      "evidence": [
+        {
+          "file": "packages/textbook/src/format.ts",
+          "lines": "151-169,238-245",
+          "detail": "移除未知引用后不记录该块缺来源；unverified仅认字面旧标记。"
+        },
+        {
+          "file": "packages/textbook/src/check.ts",
+          "lines": "38-48,111-120",
+          "detail": "Paragraph带citations但检查只核对习题相似度、式子和数值，不使用引用集合判断最低来源完整性。"
+        },
+        {
+          "file": "packages/textbook/src/index.ts",
+          "lines": "1250-1263",
+          "detail": "索引unverified仅来自既有标记或check结果。"
+        },
+        {
+          "file": "packages/textbook/src/client.tsx",
+          "lines": "93,345",
+          "detail": "出处弹窗已有“这段没有引用资料”；页头待核实标签的解释限于式子和数值。"
+        }
+      ],
+      "cause": "最低来源完整性没有成为独立状态。现有unverified专指公式/数值与资料不符，不能把它的false解释为事实正确；缺引用另有被动查看提示。",
+      "impact": "合成的无出处事实陈述可正常发布，citations=[]、unverified=false；用户需要主动打开出处弹窗才看到“这段没有引用资料”。建议在不恢复逐句模型核对的前提下，让知识性段落的缺来源状态更容易被识别。现有界面没有宣称该事实已被证实，文档也明确接受无公式/数值的语义矛盾可能漏检，因此这是一项来源完整性建议，而非已证实的虚假认证。",
+      "repro": "R03：假模型的小节只返回“静止液体的压强随着高度增加而增大。”；生成ready，该块citations=[]、original=false、unverified=false。事实方向反转用于证明不应把未检出理解为证实。",
+      "fix": "将sourceStatus与formulaCheckStatus分开，表示direct-source、cited、missing、user-edited；对知识性段落缺引用/引用全部被过滤建立可发现的来源汇总和筛选。纯过渡句可豁免。保留已有出处弹窗，遵守不逐句调用LLM及不在正文密集插警告的取舍。",
+      "acceptance": [
+        "无来源、全部无效来源、跨课程无关来源的事实段落可区分地显示未核实。",
+        "有有效引用的段落保留正常体验；不增加逐句LLM调用。"
+      ],
+      "classification": "provenance_quality_gap",
+      "notes": "docs/textbook/design.md明确用户选择不逐句模型核对，正文不插大量待核实标记。本建议可采用页头汇总/来源筛选和现有出处入口，不应破坏这个已确认的阅读取舍。"
+    },
+    {
+      "id": "DATA-04",
+      "severity": "P2",
+      "confidence": "已通过服务与SQLite复现",
+      "title": "讲义重新索引只新增知识关联 不移除已经失效的关联",
+      "evidence": [
+        {
+          "file": "packages/textbook/src/index.ts",
+          "lines": "1250-1276",
+          "detail": "删除并重建textbook_blocks后只调用learnKnowledge.link添加当前关联；未清除旧块已不再解释的知识点关联。"
+        },
+        {
+          "file": "packages/knowledge/src/store.ts",
+          "lines": "582-583",
+          "detail": "详情只检查block存在，不核对其当前nodeIds；改主题后旧链接仍被视为可用，删除后的链接则已被标为不可用。"
+        }
+      ],
+      "cause": "块索引和知识引用关系的更新协议只覆盖添加，未做按文件/块所有权的差集替换。",
+      "impact": "块修改或删除后，讲义端nodeIds已变化，知识图谱详情仍显示旧解释链接，出现两份不一致的关联事实，影响出处导航与知识定位。",
+      "repro": "R06：生成关联“压强”的非原文块，编辑成不含相关内容的个人安排；块nodeIds=[]，learnKnowledge.links(压强)中仍有该块链接。",
+      "fix": "由knowledge提供replaceOwnedLinks(ownerKey, links)服务，在一个事务中更新该文件/块拥有的关联并删除差集，保留人工或其他来源的链接；不要由textbook直接跨表删除。",
+      "acceptance": [
+        "改主题、删块、拆段、重生成、外部编辑后，两个模块查询的关联一致。",
+        "批注历史和人工知识链接不受删除差集影响。"
+      ],
+      "notes": "必须区分改主题的仍存块与已删除块：前者错误显示可用，后者已有不可用标识。"
+    },
+    {
+      "id": "DATA-05",
+      "severity": "P2",
+      "confidence": "已通过一次BEGIN故障注入复现",
+      "classification": "confirmed_bug",
+      "title": "BEGIN 失败会使连接一直处于错误的嵌套事务状态",
+      "evidence": [
+        {
+          "file": "packages/core/src/db.ts",
+          "lines": "49-75",
+          "detail": "先将depth设为1，再在try之外执行BEGIN IMMEDIATE；BEGIN抛错时不复位，随后transaction直接走嵌套分支。"
+        }
+      ],
+      "cause": "事务管理状态在数据库确实开始事务之前就标记成功，异常清理未包住BEGIN；之后写入实际上按自动提交运行，而afterCommit一直等待不存在的外层事务。",
+      "impact": "一次BEGIN失败后，后续业务事务抛错也无法回滚已写入的数据，提交后通知被无限积压，直到连接重建。触发条件是开启事务失败，未声称普通请求必现或做过磁盘损坏实测。",
+      "repro": "audit/learning/begin-failure-repro.mjs：注入一次BEGIN失败；下一笔transaction插入后抛错，行仍存在；再下一笔正常插入也存在，但两个afterCommit均未发出。输出begin-failure-output.txt。",
+      "fix": "把BEGIN、回调、COMMIT放入同一受控状态机；仅在BEGIN成功后进入depth=1，finally保证depth/pending恢复。ROLLBACK也可能失败，保留原始异常、标记连接不可用并重建；不要继续复用不明事务状态。",
+      "acceptance": [
+        "注入BEGIN、回调、COMMIT、ROLLBACK各阶段错误后，下一笔事务有正确的提交/回滚语义。",
+        "afterCommit只在对应成功提交后发出，失败队列被丢弃且不吞掉其他错误。"
+      ]
+    },
+    {
+      "id": "SEC-01",
+      "severity": "P1",
+      "confidence": "reproduced-actual-chromium",
+      "title": "共享 Markdown 渲染器未净化不可信 HTML，存在存储型 XSS",
+      "evidence": [
+        {
+          "file": "packages/shell/src/client/html.ts",
+          "lines": "23-61,71-79",
+          "detail": "Marked 允许原始 HTML，普通链接把任意 href 原样写回，未做 URL scheme allowlist 或 HTML sanitizer。"
+        },
+        {
+          "file": "packages/shell/src/client/markdown.tsx",
+          "lines": "150-152,171-198,238-241",
+          "detail": "正文、讲义块、行内内容和资料 hover 都通过 dangerouslySetInnerHTML 注入 toHtml 输出。"
+        },
+        {
+          "file": "packages/library/src/web/service.ts",
+          "lines": "178-187,191-201",
+          "detail": "text/plain 网络正文与 Exa 副本直接成为 Markdown，可携带 HTML；模型回复、解析文本也是不可信输入。"
+        },
+        {
+          "file": ".tools/dsh/node_modules/@deepseek-ai/dsh-client-connection/lib/index.js",
+          "lines": "585-593,640-654",
+          "detail": "当前 DSH 的 API 确有同源检查与签名 cookie 认证；同源 XSS 可以以已登录用户身份使用这些接口，认证本身无法防止。"
+        }
+      ],
+      "cause": "将 Markdown 解析当作 HTML 净化；对所有正文直接使用 HTML sink。已核对 DSH 主要 index/webserver 未设置能覆盖此 renderer 的 CSP；媒体预览用的 sandbox CSP 不是主页面 CSP。",
+      "impact": "浏览器显示恶意模型输出、资料原文或导入内容时可执行同源脚本，读取或改写学习数据、调用应用接口；外部图片也可产生用户未主动触发的联网请求。当前不声称已验证 OS 代码执行或绕过 cookie 的 HttpOnly。",
+      "repro": "运行 audit/security/repro-input-boundaries.mjs。toHtml('<img src=x onerror=\"document.documentElement.dataset.auditXss=1\">') 仍保留 onerror；[example](javascript:alert(1)) 仍保留 javascript: href。载荷仅设置 DOM 标记，无数据外传。 另见repro-xss-browser.mjs/json：Chromium153真实DOM标记为executed，未关闭web security，拦截所有网络且实际0网络请求；验证真实toHtml和浏览器HTML sink，未向日常DSH课程植入内容。",
+      "fix": "在唯一共享渲染出口对 marked+KaTeX 生成结果执行成熟 sanitizer，显式允许必需的 KaTeX/引用/表格标签属性；去除事件、危险标签与危险 URL scheme。普通图片按产品需求阻断远程自动加载或显式确认。随后增加 nonce/hash CSP 作为纵深防御。不要依赖正则删除 HTML。",
+      "acceptance": [
+        "浏览器回归覆盖 img/onerror、svg/onload、javascript:、实体/换行编码变体、原始 HTML、Exa/text/plain 及 hover 路径。",
+        "无任何 DOM 标记被执行，无恶意远程请求；数学公式、引用卡片、表格、折叠引文仍正确显示。",
+        "在实际 DSH 页面核对 response CSP 及所有相关渲染入口。"
+      ]
+    },
+    {
+      "id": "SEC-02",
+      "severity": "P1",
+      "confidence": "reproduced-isolated-local-http",
+      "title": "跨域重定向绕过资料网站分级并错误保留权威出处",
+      "evidence": [
+        {
+          "file": "packages/library/src/web/service.ts",
+          "lines": "84-108,137-147,153-164,167-187",
+          "detail": "只给输入 URL 定级；抓取最终 URL 后未重定级，HTML 分支还丢弃最终 URL，仍保存原 authority 和 origin URL。"
+        },
+        {
+          "file": "packages/library/src/web/fetch.ts",
+          "lines": "61-74",
+          "detail": "允许最多5次重定向，安全 IP 检查逐跳执行，但来源权威策略不在这一层重评。"
+        }
+      ],
+      "cause": "网络地址安全检查与内容来源可信度是不同边界；程序完成了前者但默认后者可随重定向继承。",
+      "impact": "受信任网站的开放跳转、被修改的下载链接或跨站迁移可把只当线索/被排除站点内容作为二级来源直接加入课程，跳过三级确认，且引用仍显示原站点。不是已验证的内网 SSRF。",
+      "repro": "合成本机服务器：localhost 被指定二级，返回302到127.0.0.1的正文；最终 URL 的 rate() 为 clue，但 LibraryWeb.add(...,'teacher') 返回added并保存authority=2、原URL。完整输出见 repro-input-boundaries.jsonl。allowAddress 仅在测试中允许本机。",
+      "fix": "抓取层返回完整跳转链；对每一跳和最终 URL 重新按网站规则分类，跨来源降低可信级别时重新请求确认或拒绝；存储 requestedUrl、finalUrl、retrievedAt 和有效 authority，出处指向真正提供内容的资源。",
+      "acceptance": [
+        "二级跳线索/blocked被拒绝，二级跳三级进入确认，二级同域跳转正常。",
+        "HTML、PDF、readWeb以及Exa回退均有同一来源策略，记录跳转链。"
+      ]
+    },
+    {
+      "id": "SEC-03",
+      "severity": "P1",
+      "confidence": "reproduced-fake-embedder",
+      "title": "关闭语义检索后当前资料仍继续上传后续批次",
+      "evidence": [
+        {
+          "file": "packages/library/src/retrieval.ts",
+          "lines": "71-77,109-139",
+          "detail": "refresh()仅清空待处理queue并置空embedder，indexSource使用开始时捕获的embedder持续循环；只有整个插件dispose会abort共享controller。"
+        },
+        {
+          "file": "packages/library/src/index.ts",
+          "lines": "119-123",
+          "detail": "设置/凭据变化触发refresh，但没有取消当前任务。"
+        }
+      ],
+      "cause": "队列开关和正在运行的上传生命周期未绑定；界面显示off只反映当前设置，不反映仍运行的任务。",
+      "impact": "用户关闭语义检索或撤回服务密钥后，本书尚未上传的片段仍可能继续发送给旧 Voyage 实例并消耗额度；与数据隐私控制的直觉不符。已发出的请求无法撤回，但后续批次应能阻止。",
+      "repro": "audit/security/repro-index-disable.mjs 创建257个合成片段。首批256启动后关闭设置并refresh；放行首批后观察第二批1个片段的embed调用仍发生，enabled=false，同时state显示off。",
+      "fix": "为当前索引任务建立可替换的AbortController；禁用、换密钥或换服务时中止在途请求并清空后续批次，逐批重新核对设置generation；界面明确区分停止中、已停止、已发送。",
+      "acceptance": [
+        "关闭后不得新增任何网络批次；取消信号到达在途请求。",
+        "重新开启可从已完成片段恢复，旧配置结果不会覆盖新任务状态。",
+        "测试切换开关、删除密钥、替换密钥和插件退出四种场景。"
+      ]
+    },
+    {
+      "id": "SEC-04",
+      "severity": "P1",
+      "confidence": "reproduced-shared-state-side-effect",
+      "title": "表达式判分执行完整 mathjs 语言而未采用受限计算器边界",
+      "evidence": [
+        {
+          "file": "packages/assess/src/grading.ts",
+          "lines": "77-98,103-108",
+          "detail": "直接parse、compile、evaluate学生答案，最多40轮，无AST/function allowlist、计算预算或隔离。"
+        },
+        {
+          "file": "packages/assess/src/units.ts",
+          "lines": "4-6",
+          "detail": "全局共用create(all)实例。"
+        },
+        {
+          "file": "packages/assess/src/calculator.ts",
+          "lines": "9-38,55-75",
+          "detail": "已有受限计算工具有AST和函数白名单，但判分未复用。"
+        },
+        {
+          "file": "packages/assess/src/index.ts",
+          "lines": "80,313-323",
+          "detail": "用户作答进入judgeByRule；2000字的答案限制无法限制ones(大数,大数)这类计算成本。"
+        }
+      ],
+      "cause": "把数学表达式输入当作纯数值公式，未限制能改变math实例或分配大数据结构的函数。",
+      "impact": "输入可执行矩阵构造和改变共享单位表；放大的矩阵/计算能阻塞服务主线程或耗尽内存。影响本地可用性和判分一致性，不声称 mathjs 能直接访问操作系统。",
+      "repro": "equivalent('sum(ones(100,100))','10000') 返回true；equivalent('createUnit(\"auditSyntheticUnit\", \"2 m\")','10000') 返回undefined，但之后 math.unit(1,'auditSyntheticUnit').toNumber('m')=2，证明副作用已经发生。测试只分配100x100小矩阵。",
+      "fix": "给判分单独创建只含所需纯数学功能的实例，复用或专门定义AST白名单，禁止createUnit/import/evaluate/parse、矩阵、范围、赋值和属性访问；限制节点数、嵌套深度与变量数；将运算放到可终止worker并设置时限/内存预算。",
+      "acceptance": [
+        "副作用载荷与矩阵/范围/自定义函数在执行前拒绝，单位表不变。",
+        "正常代数/化工公式可用；超复杂输入在固定预算内转人工或模型复核，主UI仍响应。"
+      ]
+    },
+    {
+      "id": "SEC-05",
+      "severity": "P2",
+      "confidence": "confirmed-registry-advisory-matches; reachability-partially-reviewed",
+      "title": "开发依赖和独立DSH运行时存在已公开漏洞且缺少联合升级门禁",
+      "evidence": [
+        {
+          "file": "pnpm-lock.yaml",
+          "lines": "2071,2397,2437,2500",
+          "detail": "KaTeX0.16.47、Vite7.3.6、Vitest3.2.7、Zod4.6.5等版本；根pnpm audit报告18条记录（17个不同GHSA）。"
+        },
+        {
+          "file": "scripts/setup-dsh.sh",
+          "lines": "13-23",
+          "detail": "DSH单独npm install，--before=2026-10-01，安装只按顶层DSH版本决定是否跳过；运行时lock不属于仓库根锁。"
+        },
+        {
+          "file": "audit/security/pnpm-audit.json",
+          "lines": "complete file",
+          "detail": "2 critical、2 high、10 moderate、4 low，critical来自开发依赖tinypool的prototype-pollution gadget，不能直接等同产品RCE。"
+        },
+        {
+          "file": "audit/security/dsh-npm-audit.json",
+          "lines": "complete file",
+          "detail": "DSH运行时15个受影响依赖节点（7high、8moderate），包含传播计数；依赖子集存在zod、undici、fast-uri、嵌套fflate及MCP client公告。"
+        }
+      ],
+      "cause": "主仓库依赖与DSH实际运行依赖各自解析；用历史时间截断维持兼容，会同时保留之后公布漏洞的老依赖，没有锁定可复现的已修复运行时基线。",
+      "impact": "升级成本与已知漏洞积累。Zod被用于应用入口，需优先处理；Vitest/Vite/tinypool开发漏洞的前置条件通常是开发服务暴露/原型污染，不代表普通本地产品会被远程无认证利用。DSH未启用的MCP/Office等能力也不能一概视为可达。",
+      "repro": "pnpm audit --json 与 npm audit --json --prefix .tools/dsh；原始结果及部分GitHub官方公告元数据已保存。公告日期核对见 advisories-summary.json；部分API返回403，勿将这些项的发布日期当作已独立复核。",
+      "fix": "建立主workspace+DSH两份SBOM/锁定依赖和定期audit；先升级Zod至修复线>=4.6.6并做相关边界回归，Vitest/mocker至少达到各公告共同修复线，KaTeX与Vite按兼容性升级；为DSH选择经过集成测试的补丁基线，避免自动audit fix --force。对不可达公告记录理由/复核期限。",
+      "acceptance": [
+        "两套实际安装依赖都有可追溯锁、SBOM、审计报告和例外理由。",
+        "当前可达高风险公告全部修复；升级后typecheck、全量测试、构建和真实DSH加载通过。",
+        "不要把两个扫描的计数相加当独立漏洞总数。"
+      ]
+    },
+    {
+      "id": "SEC-06",
+      "severity": "P2",
+      "confidence": "reproduced-fake-fetch",
+      "title": "MinerU请求重定向递归无上限且每跳重置超时",
+      "evidence": [
+        {
+          "file": "packages/library/src/parser.ts",
+          "lines": "45-64",
+          "detail": "每次request新建AbortSignal.timeout，302时直接递归request；注释说follow once但无hop计数或seen URL集合。"
+        }
+      ],
+      "cause": "请求级超时没有覆盖整条跳转链，递归调用没有继承剩余预算。",
+      "impact": "解析端或对象存储错误重定向时导入会无限请求/等待，违背有限超时预期；可导致任务和流量持续消耗。恶意服务是前置条件之一，这里主要是可靠性问题。",
+      "repro": "假fetch连续8次返回指向自身的302，第9次返回成功；MineruParser.check()最终成功而未限制跳数，见repro-input-boundaries.jsonl。",
+      "fix": "以迭代方式处理重定向，最多3–5跳并检测循环，所有跳转共享一个总deadline；保持跨origin不转发凭据，校验目标地址策略；对307/308保持方法语义。",
+      "acceptance": [
+        "self-loop、two-node-loop、超过上限跳转快速失败；总耗时不超过一个预算；跨origin凭据不外泄。"
+      ]
+    },
+    {
+      "id": "SEC-07",
+      "severity": "P2",
+      "confidence": "reproduced-parser-fakes",
+      "title": "切换解析服务后取消与恢复使用错误的任务所属服务",
+      "evidence": [
+        {
+          "file": "packages/library/src/imports.ts",
+          "lines": "20-26,96-103,139-175",
+          "detail": "运行任务捕获开始时的parser，但cancel重新调用parserNow；持久化任务只有remoteId，恢复时也用当前parser。"
+        },
+        {
+          "file": "packages/contracts/src/schema/library.ts",
+          "lines": "70-90",
+          "detail": "任务未存解析器endpoint/profile身份，无法将remoteId限定在所属服务域中。"
+        }
+      ],
+      "cause": "远端任务ID的命名空间被忽略，设置可即时切换但任务与服务身份未绑定。",
+      "impact": "在A解析时切换到B后取消，会向B发送A的remoteId，A后台任务继续运行/计费；重启恢复也可能查询错误服务，404重提或同号串读。后两项为源码推导，已实测取消发往错误服务。",
+      "repro": "repro-parser-switch.mjs：status(parser A,job-on-A)后切换B并cancel，捕获到cancel(parser B,job-on-A)，本地状态却已经canceled。",
+      "fix": "持久化每次任务运行的解析provider、规范endpoint、服务任务ID及不含密钥的配置版本；在途取消使用开始时实例；恢复按原服务恢复或显式声明迁移/重新提交，不把旧remoteId带到新服务。",
+      "acceptance": [
+        "A运行→切B→取消仍发到A；重启后按原服务查原任务；不同服务同remoteId不会互相影响。",
+        "服务已失效时向用户说明远端取消未确认，保留可复核状态。"
+      ]
+    },
+    {
+      "id": "L01",
+      "severity": "P1",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "交卷缺少持久化的提交锁与幂等键，同卷并发或中断重试会重复写入作答证据",
+      "evidence": [
+        {
+          "file": "packages/assess/src/index.ts",
+          "line_start": 397,
+          "line_end": 416,
+          "detail": "仅在入口检查 open，逐题 await grade，直到全部完成才 finalize；没有冻结提交或跳过已保存题。"
+        },
+        {
+          "file": "packages/assess/src/index.ts",
+          "line_start": 357,
+          "line_end": 394,
+          "detail": "record 每次创建全新 attempt id，并追加 attempt.graded。"
+        },
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 56,
+          "line_end": 62,
+          "detail": "attempts 只有 id 主键，无 test_id/problem_id 唯一约束。"
+        },
+        {
+          "file": "packages/assess/src/index.ts",
+          "line_start": 425,
+          "line_end": 435,
+          "detail": "逐题诊断的 answer 也存在检查后 await 再写入的同类窗口。"
+        }
+      ],
+      "cause": "状态枚举虽然有 submitted，但提交路径没有先原子地占有测试；幂等只对已结束的测试生效，正在判分和部分完成都仍然 open。",
+      "impact": "单用户的双标签页、手动交卷与计时交卷重叠、网络重试或进程中断都可把一次作答计为多次独立证据；不同重试内容还可能形成虚假冲突。判分期间后续题的草稿与题目也未整体冻结。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L01",
+          "L01b"
+        ],
+        "observed": "Promise.all 同交一张一题试卷得到 2 attempts、2 条证据，掌握解释为“独立答对 2 次”；第一题保存后注入中断再重试，一张两题试卷得到 3 attempts。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "短事务 CAS 将 open 改为 submitted，保存完整答案、问题版本、submittedAt 和 submissionId；随后异步判分。",
+        "对 (submissionId, problemVersionId) 建唯一约束；重试复用同一提交并只处理未完成的题。",
+        "为已提交但未判完状态提供恢复路径；不要跨模型调用持有数据库事务。"
+      ],
+      "acceptance": [
+        "并发提交只产生一组 attempts 和一组原始 graded 事件。",
+        "在任意题后中断并重启恢复，attempt 数与试题数一致。",
+        "交卷后改草稿/参考答案不影响该提交快照；已冻结时间不随重试变化。"
+      ],
+      "notes": "不要误称模拟考总分一定翻倍：view 的 verdictOf/find 取首个 attempt；已证实的是证据重复和视图/计数不一致。 修复使用 submitted 状态时，还必须同时改 view 的 !open 返回答案逻辑，否则判分中会提前暴露参考答案。"
+    },
+    {
+      "id": "L02",
+      "severity": "P1",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "模型可仅靠 authority/tier 标签把无出处原创题放入测试预留池",
+      "evidence": [
+        {
+          "file": "packages/assess/src/tools.ts",
+          "line_start": 169,
+          "line_end": 176,
+          "detail": "tier 2 的 chunkId 只是可选参数，authority 由工具调用者自报。"
+        },
+        {
+          "file": "packages/assess/src/tools.ts",
+          "line_start": 223,
+          "line_end": 240,
+          "detail": "只有填写 chunkId 才检查；没有出处时 origin=agent，却仍使用所报 tier 与 answerSource。"
+        },
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 169,
+          "line_end": 184,
+          "detail": "拒绝 tier4/unverified，但未验证 tier2 与出处、权威答案证据的一致性。"
+        }
+      ],
+      "cause": "可靠性依据存为可随意声明的标签，没有用可校验来源构造可信状态；同一问题可以同时为 origin=agent、tier=2、answerSource=authority。",
+      "impact": "本应隔离原创题与权威验收题的关键保证可被正常模型工具调用绕过；幻觉题干、模型心算答案可成为阶段/结课证据。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L02"
+        ],
+        "observed": "通过真实 add_problems 工具提交无 chunkId/原题的 tier2 + authority + test-reserved，成功存为 origin.kind=agent 的预留题。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "以来源联合类型表达题目出处和答案依据；tier2 必须引用可追溯来源及明确答案位置，无法证明时降为 unverified/practice。",
+        "从引用或计算结果推导 answerSource，不接受无证据的字符串提权。",
+        "import_exercises 的人工覆盖答案同样应区分解析修正、教师推导和已核验原文。"
+      ],
+      "acceptance": [
+        "缺来源、无答案引用、来源不在授权资料中的 authority 题被拒绝进入预留池。",
+        "有有效原文引用或可重放计算的题可正常入池，并能在界面追溯证据。"
+      ],
+      "notes": "这不是多租户安全问题，而是单用户本地学习产品的来源可信性不变量。"
+    },
+    {
+      "id": "L03",
+      "severity": "P1",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "题目被纠错后，旧作答已在掌握层作废，却仍能让阶段复盘判为通过",
+      "evidence": [
+        {
+          "file": "packages/assess/src/stage.ts",
+          "line_start": 61,
+          "line_end": 75,
+          "detail": "阶段结果只读取原始 verdict 与开始时 fresh 标记。"
+        },
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 577,
+          "line_end": 587,
+          "detail": "view 取缓存 grading 生成报告，不读取证据有效性。"
+        },
+        {
+          "file": "packages/curriculum/src/review.ts",
+          "line_start": 66,
+          "line_end": 84,
+          "detail": "只把 retired 问题排除；fixed 后恢复 active 的问题不被排除。"
+        },
+        {
+          "file": "packages/learner/src/rules.ts",
+          "line_start": 79,
+          "line_end": 101,
+          "detail": "掌握层正确地将后续 fixed/retired 事件之前的作答置为 void。"
+        }
+      ],
+      "cause": "阶段报告、复盘与掌握层分别解释同一事实，只有 learner 使用作废与帮助规则；固定成 active 的纠错问题在复盘里失去“历史证据已无效”的信息。",
+      "impact": "已经确认题目/参考答案有错的旧成绩仍显示通过并默认建议下一阶段；风险不被携带。帮助已揭答案时也出现 assisted 与 pass 并列，容易被当作独立验收通过。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L03",
+          "L03b",
+          "L03c"
+        ],
+        "observed": "先正确答题再 fixed 参考答案：learner=untested，解释“有 1 次作答的题目后来核对出有错，不计”；stage=pass、review=pass、recommendation=next。提前或迟到记录 answer-revealed 时 learner=assisted，阶段仍 pass。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "抽出唯一的有效证据投影，返回每条 attempt 的原始评分、有效评分、void/pending、帮助和新颖性；所有报告共用。",
+        "保留“答对”这一原始事实，同时将失效证据显示为不可用于验收，并阻止用其得出通过/无风险。",
+        "帮助规则对阶段建议的作用要写进产品政策；至少明确“有帮助完成，独立验收仍待验证”。"
+      ],
+      "acceptance": [
+        "fixed 与 retired 的历史作答均不能支撑阶段/结课验收通过。",
+        "迟到日志与重算后各页面对证据有效性的解释一致。",
+        "保留原始判分及作废原因，能解释为什么历史得分与当前结论不同。"
+      ],
+      "notes": "docs/curriculum/design.md 39–40 当前确实把“新题全对”定义为 pass，并另列帮助/掌握状态。因此 assisted/pass 部分是跨层产品政策缺陷；fixed/void 仍 pass 是明确实现缺陷。成功补记迟到 help 后 learner 会立即纠正，不应声称它永久错判。"
+    },
+    {
+      "id": "L04",
+      "severity": "P1",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "显式指定阶段/结课题目会绕开必需蓝图，生成无法完成正常复盘的测试",
+      "evidence": [
+        {
+          "file": "packages/assess/src/tools.ts",
+          "line_start": 342,
+          "line_end": 365,
+          "detail": "final 和 stage 的必需计划仅在 !problems 时构造。"
+        },
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 302,
+          "line_end": 378,
+          "detail": "显式 problemIds 分支只查题池/状态，不要求 stage.plan 或 final.final。"
+        },
+        {
+          "file": "packages/curriculum/src/index.ts",
+          "line_start": 315,
+          "line_end": 320,
+          "detail": "这种 stage 测试仍会把阶段推进到 reviewing。"
+        },
+        {
+          "file": "packages/curriculum/src/tools.ts",
+          "line_start": 28,
+          "line_end": 31,
+          "detail": "复盘仅接收具有 stageReport 的已判分测试。"
+        },
+        {
+          "file": "packages/curriculum/src/tools.ts",
+          "line_start": 185,
+          "line_end": 190,
+          "detail": "缺 stageReport 时正常 save_stage_review 直接失败。"
+        }
+      ],
+      "cause": "Test.kind 与 plan/scope/mock/final 是彼此独立的可选字段，工具允许选择题目却跳过不可省略的验收结构。",
+      "impact": "模型合法使用 problemIds 发布阶段测试后，用户作答完毕却无法保存复盘；显式 final 也缺用于识别当前结课检验的 stageIds。该路径还跳过自动组卷的新题检查。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L04"
+        ],
+        "observed": "真实 start_test 工具以 kind=stage、problemIds 发布；交卷后阶段 reviewing，但 stageReport 不存在，save_stage_review 报“找不到这个阶段判过分的阶段测试”。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "用 discriminated union 约束不同测试种类的必要计划。",
+        "显式指定题目时也生成/验证完整蓝图和目标映射；或限制该参数只用于允许无计划的测试种类。",
+        "在 store/service 层统一校验，避免只有工具做保证。"
+      ],
+      "acceptance": [
+        "对每个 Test.kind 运行自动选题与显式选题的完整生命周期。",
+        "stage 始终可复盘，final 始终可生成当前目标对应报告；不合格输入发布前失败。"
+      ]
+    },
+    {
+      "id": "L05",
+      "severity": "P1",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "表达式“等价”只在 0.5–2 的随机正数上抽样，非恒等式被确定判对",
+      "evidence": [
+        {
+          "file": "packages/assess/src/grading.ts",
+          "line_start": 77,
+          "line_end": 98,
+          "detail": "每个变量仅在 [0.5,2) 抽样，几次相近就返回 true。"
+        },
+        {
+          "file": "packages/assess/src/grading.ts",
+          "line_start": 103,
+          "line_end": 107,
+          "detail": "抽样 true 被直接转为 correct/score1。"
+        }
+      ],
+      "cause": "有限正区间上的数值一致被当成全定义域数学等价；问题模型没有变量定义域，绝对误差下限也会把小量零化。",
+      "impact": "符号、绝对值、分段函数、奇点和小量公式可被误判正确，并写入确定的独立掌握证据；变量范围不明时尤其危险。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L05"
+        ],
+        "observed": "sqrt(x^2) 对参考 x 稳定得到 correct，但 x=-1 时为 1 != -1。另用纯函数实际检查 abs(x)/x、x<2?x:999/x、0/1e-7 均返回 equivalent=true。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "限定表达式语法并在明确变量域中使用可证明的符号等价/规范化规则。",
+        "数值抽样只用于发现反例；无法证明时返回不确定或进入可复核判分，不能以几次命中给数学证明级确定性。",
+        "覆盖负值、零、极值、奇点和量级；保存域/规则版本以供审计。"
+      ],
+      "acceptance": [
+        "sqrt(x^2) 与 x 在未知实数域不自动判同，在明确非负域可合法识别。",
+        "分段伪等价、奇点/量纲/极小常数的边界用例不被肯定误判。"
+      ],
+      "notes": "表达式执行副作用与资源边界见SEC-04；本项专门讨论数学等价性的判定，二者应分别验收。"
+    },
+    {
+      "id": "L06",
+      "severity": "P2",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "并行小节抽取以过期图快照去重，正常抽取会制造同名歧义节点",
+      "evidence": [
+        {
+          "file": "packages/knowledge/src/extract.ts",
+          "line_start": 25,
+          "line_end": 25,
+          "detail": "抽取并行度固定为 2。"
+        },
+        {
+          "file": "packages/knowledge/src/extract.ts",
+          "line_start": 302,
+          "line_end": 321,
+          "detail": "模型调用前捕获 known，调用后仍用旧快照检查，然后以 system 添加。"
+        },
+        {
+          "file": "packages/knowledge/src/store.ts",
+          "line_start": 341,
+          "line_end": 356,
+          "detail": "同名保护只作用于 actor=teacher，system 抽取绕过。"
+        },
+        {
+          "file": "packages/knowledge/src/store.ts",
+          "line_start": 718,
+          "line_end": 724,
+          "detail": "同课同名被认为是用户刻意选择，不自动建议合并。"
+        }
+      ],
+      "cause": "防重校验发生在长模型调用之前，提交阶段既不刷新 known，也不对系统生成节点执行原子的复用判定。",
+      "impact": "相邻章节共用概念时会生成重复身份，按标题关联教材/出题报歧义；证据、先修关系和来源散落在不同节点，需要手工合并。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L06"
+        ],
+        "observed": "同一课程同时抽取 1.1、1.2，两次合成模型均输出“共同概念”；最终同名节点 2 个，resolve 报同名/别名对应多个节点。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "模型完成后在提交事务内重新读取当前图，并按规范化标题/别名/类型处理可复用身份。",
+        "把“用户明确创建不同身份”与“系统自动创建”区分，后者不得绕过同名检查。",
+        "请求级幂等之外增加身份级一致性；无需序列化整个模型等待。"
+      ],
+      "acceptance": [
+        "两个并行小节产生相同概念时落为一个节点、两份来源。",
+        "含义不同但同名的内容进入待区分队列，不静默重复或误合并。"
+      ]
+    },
+    {
+      "id": "L07",
+      "severity": "P2",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "学习中的阶段可以直接重写设计并清除确认，但再也无法确认新设计",
+      "evidence": [
+        {
+          "file": "packages/curriculum/src/index.ts",
+          "line_start": 158,
+          "line_end": 175,
+          "detail": "saveDesign 无阶段状态限制，清 designConfirmedAt 但保留 learning/testing/reviewing/done；confirmDesign 只接受 designing。"
+        },
+        {
+          "file": "packages/curriculum/src/store.ts",
+          "line_start": 173,
+          "line_end": 194,
+          "detail": "修订会删除所有未开始课时，重建新 ID；已开始却未列入新稿的课时仍保留。"
+        }
+      ],
+      "cause": "设计修订沿用了首次起草流程，缺少已开始阶段的修订状态机；保存文件、修改课时和清确认同时直接生效。",
+      "impact": "已确认并进行中的课程内容在未重新同意时改变；页面/服务一边显示草稿未确认、一边保持学习中且拒绝确认。未开始课时 ID 重建还会破坏已有引用并留下混杂结构。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L07"
+        ],
+        "observed": "构造已确认 learning 阶段后 saveDesign；stage.status 仍 learning，designConfirmedAt 消失，confirmDesign 报“没有待确认的设计”。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "初期可先明确拒绝正在学习及之后状态的原地 saveDesign，并提供受控修订入口。",
+        "成熟实现将新设计作为有基线版本的草稿提案，确认后迁移课时/任务；已开始的记录保留历史版本。",
+        "按稳定课时身份更新，明确删除、重排和保留规则，避免全删重建未开始课时。"
+      ],
+      "acceptance": [
+        "每种阶段状态对设计修订的行为明确且可恢复。",
+        "新设计真正确认前当前设计与进行中任务保持一致；确认后不产生孤立 lessonId 或重复序号。"
+      ]
+    },
+    {
+      "id": "L08",
+      "severity": "P2",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "撤回测试会暴露参考答案，却不将预留题记为已见，之后仍当新题组卷",
+      "evidence": [
+        {
+          "file": "packages/assess/src/index.ts",
+          "line_start": 696,
+          "line_end": 705,
+          "detail": "withdraw 直接 abandoned 并返回 view，没有 problem.seen。"
+        },
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 562,
+          "line_end": 570,
+          "detail": "只要不为 open 就返回完整 answer，abandoned 也包括在内。"
+        },
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 288,
+          "line_end": 299,
+          "detail": "fresh 集合只从已作答/seen/作业得到。"
+        },
+        {
+          "file": "packages/assess/src/index.ts",
+          "line_start": 708,
+          "line_end": 718,
+          "detail": "dropCheck 特意记 seen，而普通撤卷没有同样保护。"
+        }
+      ],
+      "cause": "答案可见性被简化为 open/非open；曝光记录没有覆盖撤卷状态。",
+      "impact": "一次未作答但看过或已被回包暴露答案的试卷撤回后，可再次作为“没见过”的正式验收题；削弱新题迁移与延迟验证的可信度。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L08"
+        ],
+        "observed": "撤回一张预留题阶段测试，返回 problems[0].answer；下一张自动蓝图测试再次选同题且 plan.fresh 包含它。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "单独定义各状态的题干/答案可见性，未交卷撤回不应默认公开答案。",
+        "在题目实际显示或答案公开时记 exposure/seen；自动组卷用跨课程的题目身份/版本曝光记录。",
+        "区分“尚未展示的撤销”和“已经展示后的撤回”。"
+      ],
+      "acceptance": [
+        "撤回已看过试卷后，同题不再进入新题列表。",
+        "尚未打开的限时试卷撤销不泄露答案；不会因无意义发布消耗新题。"
+      ],
+      "notes": "已证实服务返回和历史 view 可得到答案；没有在真实浏览器验证 abandoned 页是否逐题渲染答案，不应声称 UI 已必然展示。"
+    },
+    {
+      "id": "L09",
+      "severity": "P2",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "题目原地可变但作答未保存题目版本，历史试卷会换成新参考答案",
+      "evidence": [
+        {
+          "file": "packages/contracts/src/schema/assess.ts",
+          "line_start": 159,
+          "line_end": 175,
+          "detail": "试卷仅保存问题 ID，无题目版本或题面快照。"
+        },
+        {
+          "file": "packages/contracts/src/schema/assess.ts",
+          "line_start": 210,
+          "line_end": 225,
+          "detail": "Attempt 保存答卷但没有其面对的题面、答案/rubric 版本。"
+        },
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 210,
+          "line_end": 214,
+          "detail": "saveProblem 原地覆盖。"
+        },
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 565,
+          "line_end": 577,
+          "detail": "历史 view 读取当前问题，配原有 attempt grading。"
+        }
+      ],
+      "cause": "证据事件不可变，但其所引用的题目语义不是不可变对象；重放只有评分事实，没有当时判分上下文。",
+      "impact": "用户回看历史记录会看到“答 2、判正确、参考 99”；难以解释初判/改判和题目纠错，开放题 rubric 修改后也失去可复核依据。判分过程中改题还可能影响尚未处理的后续题。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L09"
+        ],
+        "observed": "提交答案 2 得 correct；reviewProblem fixed 将答案改 99；原历史 test view 立刻显示参考 99，原答 2 与 correct 保持。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "引入不可变 ProblemVersion，Test/Attempt 固定其 ID；题面、答案、评分 rubric、来源、计算和判分规则版本一并追溯。",
+        "纠错产生新版本并独立标记旧证据是否无效；历史视图同时说明原版本和后续纠正。"
+      ],
+      "acceptance": [
+        "修改题目后历史试卷仍显示原先实际作答题面/参考答案，并明确后续纠错。",
+        "同一题版本在重试、重判与证据重放中保持一致。"
+      ]
+    },
+    {
+      "id": "L10",
+      "severity": "P2",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "目标版本检查不是原子比较并交换，同版本并发修订均成功且丢失内容",
+      "evidence": [
+        {
+          "file": "packages/goal/src/index.ts",
+          "line_start": 209,
+          "line_end": 237,
+          "detail": "读取版本后异步进入 commit，两次调用可读取相同 before。"
+        },
+        {
+          "file": "packages/goal/src/index.ts",
+          "line_start": 193,
+          "line_end": 194,
+          "detail": "写入只使用 before.version+1，不传文件基线 hash。"
+        },
+        {
+          "file": "packages/goal/src/index.ts",
+          "line_start": 240,
+          "line_end": 276,
+          "detail": "setFacts 同样先查版本后无条件写入；setSource/acknowledge 同类。"
+        },
+        {
+          "file": "packages/core/src/store.ts",
+          "line_start": 186,
+          "line_end": 191,
+          "detail": "底层已有 ifHash 冲突保护，但 goal 没使用。"
+        }
+      ],
+      "cause": "乐观锁只校验读时的文档版本，真正写时没有 CAS；单用户页面事实编辑与老师修订可以并发。",
+      "impact": "两次操作都返回成功和同一新版本，后写覆盖先写，用户或老师的修改悄悄消失；目标条目、资料绑定和条件的可信历史被削弱。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L10"
+        ],
+        "observed": "对 v1 并发 revise purpose 和 revise level；两次均返回 v2，最终仅保留 level 改动，purpose 回到原值。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "从 goal.get 返回实际文件 hash，并将其作为 write 的 ifHash；或用课程文档级串行变更服务。",
+        "冲突返回当前版本和可复核差异，重读后合并非重叠字段；不能静默覆盖。",
+        "不要把所有 get 错误吞成“目标不存在”，解析失败应保留文件并明确报告。"
+      ],
+      "acceptance": [
+        "同一基线的并发写至少一项明确冲突，或合并后得到连续版本且两项内容均保留。",
+        "用户 setFacts 与教师 revise 的竞态也覆盖。"
+      ],
+      "notes": "修复可与DATA-03的端到端版本条件共同设计；目标修订仍应单独验证已有ifHash条件是否被正确使用。"
+    },
+    {
+      "id": "L11",
+      "severity": "P1",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "数值判分只取数字前缀，维度未知时无条件忽略尾部内容",
+      "evidence": [
+        {
+          "file": "packages/assess/src/units.ts",
+          "line_start": 81,
+          "line_end": 95,
+          "detail": "splitQuantity 只解析开头数字，将剩余所有内容当作 unit。"
+        },
+        {
+          "file": "packages/assess/src/units.ts",
+          "line_start": 64,
+          "line_end": 73,
+          "detail": "unitOf 不能识别 % 等无字母维度表达。"
+        },
+        {
+          "file": "packages/assess/src/grading.ts",
+          "line_start": 16,
+          "line_end": 39,
+          "detail": "参考单位未识别或无单位时仅比较数字，不验证尾部、单位或表达式。"
+        }
+      ],
+      "cause": "解析失败、无量纲、未知复合单位三种语义混在 undefined 中，并采取宽松的“只比较数字”回退。",
+      "impact": "格式错误、未算完的表达式和明显错误量纲被判确定正确；对无量纲量及质量分数/百分比常见的化工学习尤其不可靠。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L11"
+        ],
+        "observed": "参考无单位 2 时答案“2+100”“2 kg”均 correct；参考 20% 时“20 kg”也 correct。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "完整消费答案字符串：数字后只允许可识别单位/明确计数词，剩余运算符必须求值或返回待核对。",
+        "将 dimensionless、recognized-unit、unknown-unit 分开表示；未知单位不能默认为确定可忽略。",
+        "显式支持 %/ppm/比例量与规范化量纲；未知教材复合单位至少要求一致文本或人工复核。"
+      ],
+      "acceptance": [
+        "2+100 不被当作 2；无量纲参考拒绝 kg 等有量纲答案。",
+        "20%、0.2 等等价比例按既定规则一致，20 kg 不通过。",
+        "保留现有常见化工单位、科学计数法和中文单位的正确转换。"
+      ]
+    },
+    {
+      "id": "L12",
+      "severity": "P2",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "诊断把所有“部分对”当作已会，多问题一问全错也会跳过先修探测",
+      "evidence": [
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 381,
+          "line_end": 388,
+          "detail": "除了 incorrect/pending-review，所有 verdict 都映射为 right，包括任何 partial。"
+        },
+        {
+          "file": "packages/assess/src/grading.ts",
+          "line_start": 121,
+          "line_end": 141,
+          "detail": "多问题有对有错会得到 partial，不仅是漏单位。"
+        },
+        {
+          "file": "packages/assess/src/adaptive.ts",
+          "line_start": 7,
+          "line_end": 11,
+          "detail": "right 的约定只应为 correct 或仅缺单位。"
+        },
+        {
+          "file": "packages/assess/src/adaptive.ts",
+          "line_start": 88,
+          "line_end": 118,
+          "detail": "right 直接给 known，并推断/跳过其先修。"
+        }
+      ],
+      "cause": "partial 是过粗的聚合枚举，调用者将它误当作“方法正确只差单位”，未检查分问/原因。",
+      "impact": "摸底会高估基础、跳过应探的先修；同一份作答显示诊断已会但掌握层还没答对，影响后续课程起点。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L12"
+        ],
+        "observed": "两问数值题答 2 和 999，分问为 correct/incorrect，整题 partial，诊断 known，learner not-yet。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "给判分增加结构化错误原因，如 missing-unit/partial-steps/wrong-part，诊断只对白名单情况放宽。",
+        "无法区分原因时把 partial 作为不确定或需要继续探测；多节点/分问题按可定位证据处理。"
+      ],
+      "acceptance": [
+        "任一关键分问答错不直接判该节点 known；缺单位政策单独覆盖。",
+        "诊断推断不进入独立掌握证据，并向用户解释二者差异。"
+      ]
+    },
+    {
+      "id": "L13",
+      "severity": "P2",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "模型判分耗时被算作学习者超时和作答时长",
+      "evidence": [
+        {
+          "file": "packages/assess/src/index.ts",
+          "line_start": 408,
+          "line_end": 416,
+          "detail": "已记录 lockedAt，但 overtime 仍在全部异步判分完成后用 Date.now 计算。"
+        },
+        {
+          "file": "packages/assess/src/index.ts",
+          "line_start": 466,
+          "line_end": 468,
+          "detail": "endedAt 是判分结束时间。"
+        },
+        {
+          "file": "packages/assess/src/store.ts",
+          "line_start": 588,
+          "line_end": 588,
+          "detail": "模拟考分钟数由 openedAt 到 endedAt 计算。"
+        }
+      ],
+      "cause": "交卷完成与判分完成共用一个结束时刻；虽然 attempt 保留提交时间，计时报告没有使用它。",
+      "impact": "按时交卷会被标为超时；慢模型、多题试卷和重试会放大作答时长，错误反馈学习者的速度表现。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L13"
+        ],
+        "observed": "合成时钟：05:00 开始，05:01 截止，05:00:59 提交，判分到 05:02:30；结果 overtime=1 分钟。没有实际等待或真实模型调用。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "Test 保存 submittedAt 与 gradingCompletedAt；时长/超时仅比较服务器接受并冻结提交的 submittedAt。",
+        "计时截止与上传、识别确认的政策单独定义，不把后端模型时间转嫁给学习者。"
+      ],
+      "acceptance": [
+        "相同答卷提交时刻下，判分延迟从 0 增到数分钟，作答时长和超时结果不变。"
+      ]
+    },
+    {
+      "id": "L14",
+      "severity": "P2",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "知识身份合并后阶段仍引用旧身份，正常自动组卷找不到当前节点的新题",
+      "evidence": [
+        {
+          "file": "packages/knowledge/src/store.ts",
+          "line_start": 649,
+          "line_end": 659,
+          "detail": "identity 返回 current 和该节点的历史 children，旧节点不会在 merged 中自动包含其 current。"
+        },
+        {
+          "file": "packages/assess/src/tools.ts",
+          "line_start": 77,
+          "line_end": 85,
+          "detail": "probeNodes 使用输入 ID 原样构造核心节点，没有归一到 identity.current。"
+        },
+        {
+          "file": "packages/assess/src/tools.ts",
+          "line_start": 353,
+          "line_end": 365,
+          "detail": "自动阶段蓝图直接读取 stage.nodeIds。"
+        },
+        {
+          "file": "packages/curriculum/src/report.ts",
+          "line_start": 23,
+          "line_end": 26,
+          "detail": "课程报告也直接读取阶段保存的 nodeIds 的状态。"
+        }
+      ],
+      "cause": "知识层正确保留旧身份用于历史，但课程/组卷/报告消费者没有统一解析 canonical identity；合并没有覆盖这些持久化引用的语义。",
+      "impact": "正常合并完成后，有题却报缺题；前测/阶段/结课核心节点及先修映射可能分裂，报告还可能查询旧身份状态而漏掉合并后的证据。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L14"
+        ],
+        "observed": "阶段设计引用节点 A，将 A 合入 B，给 B 添加新预留题；普通 start_test(kind=stage) 报“没有本阶段核心知识点的新题”，stage.nodeIds 仍是 A，而 identity(A).current=B。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "建立统一 resolveIdentity 输入投影，对阶段/风险/目标映射等当前决策解析 current 并去重。",
+        "历史日志和历史题面保留原 ID；当前组卷节点使用 current，并把所有历史别名 ID 放入 also。",
+        "合并/撤销后失效相关缓存和待发布蓝图，明确处理已保存复盘。"
+      ],
+      "acceptance": [
+        "合并前后同一阶段都能使用当前身份的新题。",
+        "多次链式合并及撤销后，前测/最终报告/掌握查询的一致性不丢失。"
+      ]
+    },
+    {
+      "id": "L15",
+      "severity": "P1",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "保存复盘后改判不会使待决定的复盘失效，失败可以沿旧通过结果无风险推进",
+      "evidence": [
+        {
+          "file": "packages/curriculum/src/index.ts",
+          "line_start": 234,
+          "line_end": 255,
+          "detail": "saveReview 将当时结果复制为固定 review.nodes。"
+        },
+        {
+          "file": "packages/curriculum/src/index.ts",
+          "line_start": 258,
+          "line_end": 286,
+          "detail": "decideReview 只读已保存结果，不重新验证 test/证据版本或未处理申诉。"
+        },
+        {
+          "file": "packages/assess/src/index.ts",
+          "line_start": 572,
+          "line_end": 601,
+          "detail": "regrade 更改当前评分、追加事件，但没有使已保存复盘过期。"
+        },
+        {
+          "file": "packages/curriculum/src/review.ts",
+          "line_start": 29,
+          "line_end": 40,
+          "detail": "风险携带只取已决定的旧 review.nodes。"
+        }
+      ],
+      "cause": "复盘是有依赖的决策快照，但没有依赖版本/fingerprint 或 stale 状态；作答纠正和用户最终决定之间无一致性校验。",
+      "impact": "老师先保存通过复盘，随后复核为错误，用户仍可根据旧表进入下一阶段且不携带风险。新申诉、问题核查等同样可能绕过保存时才做的 blocker 检查。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L15"
+        ],
+        "observed": "真实工具保存 pass 复盘后 regrade incorrect：即时 stageReport=fail，saved review=pass；decideReview(next) 成功，carried 风险数为 0。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "保存复盘时记录依赖的测试提交、评分与有效证据版本；发生改判/撤证/新申诉时标为待更新。",
+        "最终决定前重新计算并检查事实指纹/阻塞项，变化则要求刷新并复核差异。",
+        "已决定的历史记录可以保留，但后续更正必须明确携带风险/补充结论，不能静默沿用。"
+      ],
+      "acceptance": [
+        "保存与决定之间改判或新增申诉，不能无提示按旧 pass 前进。",
+        "风险携带与用户当次确认的最新事实一致。"
+      ]
+    },
+    {
+      "id": "L16",
+      "severity": "P2",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "结课测试换题不更新目标条目的问题引用，替补题答对仍被算作没答",
+      "evidence": [
+        {
+          "file": "packages/assess/src/index.ts",
+          "line_start": 518,
+          "line_end": 525,
+          "detail": "report 换题时更新 Test.problemIds、stage.plan 和 mock.sections，但遗漏 final.items.problemIds。"
+        },
+        {
+          "file": "packages/assess/src/final.ts",
+          "line_start": 53,
+          "line_end": 68,
+          "detail": "finalReport 只按 plan.items 保存的问题 ID 查 verdict 和题号。"
+        }
+      ],
+      "cause": "换题逻辑为多个测试计划分别手工同步，新加入的 final 计划没有纳入统一映射。",
+      "impact": "用户依法报告“这题做过/题有问题”并完成替补题后，结课目标被误报未答/未检验，报告漏记实际作答，可能要求无意义补测。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L16"
+        ],
+        "observed": "一目标两道候选预留题，首题 done-before 后换成第二题并答对；attempt correct，但 finalReport 目标 outcome=insufficient、problems=[]，计划仍指向旧题。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "将题目替换抽成对所有 kind 计划都维护的原子操作，重算目标覆盖/未覆盖列表。",
+        "替补不再覆盖原目标或跳题无替补时明确更新缺口，不能保留悬挂引用。"
+      ],
+      "acceptance": [
+        "final 单次/多次换题、无替补跳题的目标题号和结果全部对应真实当前试卷。",
+        "stage/mock 的既有换题行为保持一致。"
+      ]
+    },
+    {
+      "id": "L17",
+      "severity": "P1",
+      "confidence": "high",
+      "verification": "reproduced",
+      "title": "结课检验没有绑定目标语义版本，旧测试可为大幅修订后的目标背书",
+      "evidence": [
+        {
+          "file": "packages/contracts/src/schema/assess.ts",
+          "line_start": 143,
+          "line_end": 155,
+          "detail": "FinalPlan 保存文本和 stageIds，但没有目标版本/目标语义 fingerprint。"
+        },
+        {
+          "file": "packages/contracts/src/schema/assess.ts",
+          "line_start": 188,
+          "line_end": 190,
+          "detail": "currentFinal 仅按 stageIds 判断仍适用。"
+        },
+        {
+          "file": "packages/curriculum/src/tools.ts",
+          "line_start": 57,
+          "line_end": 70,
+          "detail": "报告取当前 goal.canDo 与旧 final；不核对语义变化。"
+        },
+        {
+          "file": "packages/curriculum/src/report.ts",
+          "line_start": 23,
+          "line_end": 30,
+          "detail": "仅凭相同 item.key 对齐，旧 final pass + 原节点独立就给当前条目 done。"
+        }
+      ],
+      "cause": "稳定条目键被同时当作语义未变化的证明；目标修订虽然重新要求确认，却没有失效旧验收和更新所需证据范围。",
+      "impact": "完成较小目标的旧试卷可以让完全升级后的能力目标显示“做到了”；这是实际学习达成声明的错误，不能靠用户确认新文字弥补。",
+      "repro": {
+        "test_file": "audit/learning/domain-repro.test.ts",
+        "test_ids": [
+          "L17"
+        ],
+        "observed": "旧目标“按给定参数计算静水压强”完成唯一 final；同 key 修订并确认“独立设计完整传热网络并优化运行参数”；不增加测试即可 save_course_report，报告新目标 status=done。",
+        "output": "audit/learning/repro-output.txt"
+      },
+      "fix": [
+        "目标条目保留稳定 identity，同时维护 semantic revision；FinalPlan 固定目标版本、支持阶段/节点版本及测试条件。",
+        "实质目标或验收标准变更后标记旧 final 只对原版本有效，要求补充验收/明确映射迁移，不能自动等同。",
+        "轻微措辞/事实变更与能力范围变化使用明确规则和可审查迁移记录区分。"
+      ],
+      "acceptance": [
+        "扩大能力范围/改验证标准时旧 final 不再认证新版本。",
+        "纯措辞修订可在可验证的等义映射下复用，历史报告仍指向当时目标版本。"
+      ]
+    },
+    {
+      "id": "FE-01",
+      "severity": "P1",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "作答自动保存会吞掉失败、提前清除脏状态，交卷也不等待已发出的保存请求",
+      "evidence": [
+        {
+          "file": "packages/assess/src/client.tsx",
+          "line_start": 712,
+          "line_end": 730,
+          "detail": "store先删除unsaved；计时器触发后从timers移除；flush只检查timers，不跟踪in-flight Promise。"
+        },
+        {
+          "file": "packages/assess/src/client.tsx",
+          "line_start": 742,
+          "line_end": 745,
+          "detail": "handIn只等待仍在timers中的flush，随后立即submit。"
+        },
+        {
+          "file": "packages/assess/src/client.tsx",
+          "line_start": 883,
+          "line_end": 892,
+          "detail": "界面承诺随时自动保存，但saveDraft把全部错误catch为空。"
+        },
+        {
+          "file": "packages/assess/src/client.tsx",
+          "line_start": 706,
+          "line_end": 706,
+          "detail": "answerOf不携带transcription.confirmed，交卷需要服务器已有确认草稿。"
+        }
+      ],
+      "cause": "把“已发起请求”当成“已持久化”，没有每题保存队列、版本或待确认请求集合；错误被静默消化。",
+      "impact": "网络/服务器失败后，最后一次答案不再处于unsaved集合，页面没有失败提示或自动重试；离开/刷新可丢失作答。转写确认保存已在路上时立即交卷，服务器可能仍读到未确认草稿。后端并发提交与判分幂等问题另见L01。",
+      "repro": [
+        "拒绝assess.draft请求：store返回fulfilled、dirty集合变0，用户看不到失败。",
+        "让一次draft请求保持pending，timer已经触发删除；调用flush会立即返回，随后submit可先到服务器。"
+      ],
+      "fix": [
+        "每题维护latest revision、dirty snapshot及串行保存Promise；只有对应版本收到ACK才清脏。",
+        "保存错误在答案旁显示，并保留可重试草稿；保存中/已保存/未保存有明确状态。",
+        "交卷、识别、离开之前的flush等待所有排队与在途保存；最好让提交携带确认状态并由服务器一次校验并冻结。"
+      ],
+      "acceptance": [
+        "断网输入、恢复、重试、刷新后最后一版答案完整；失败期间明确显示未保存。",
+        "人为乱序两个保存请求，持久化结果仍是最新版本。",
+        "延迟确认保存并立即交卷，不出现读旧确认状态或丢答案。"
+      ],
+      "verification": "async-state-repro.mjs提取未改动store/flush/saveDraft函数，async-state-result.json：surfaced=false, remainingDirtyEntries=0, flushReturnedBeforeSave=true；不是完整浏览器测试。"
+    },
+    {
+      "id": "FE-02",
+      "severity": "P1",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "切换课程时侧边会话仍可操作上一门课；新课程加载失败后可无限保留旧会话",
+      "evidence": [
+        {
+          "file": "packages/sidechat/src/client.tsx",
+          "line_start": 49,
+          "line_end": 80,
+          "detail": "CourseSideChat在课程变化时没有key；active的deps是courseId。"
+        },
+        {
+          "file": "packages/sidechat/src/client.tsx",
+          "line_start": 108,
+          "line_end": 126,
+          "detail": "session直接取active.data；只在data===undefined时显示加载；旧session仍可close/Chat发送；未展示active.error。"
+        },
+        {
+          "file": "packages/kit/src/client.ts",
+          "line_start": 33,
+          "line_end": 42,
+          "detail": "deps变化reload保留previous.data，失败也保留。"
+        },
+        {
+          "file": "packages/shell/src/client.tsx",
+          "line_start": 1062,
+          "line_end": 1063,
+          "detail": "右侧槽只改变scope props，没有按课程重建。"
+        }
+      ],
+      "cause": "同一资源的后台刷新与资源身份变化共用保留旧数据的策略；课程作用域没有成为组件/查询身份的一部分。安装的DSH SlotOutlet也只按注册entry稳定key，并不会因ownerProps.courseId变化强制重挂载。",
+      "impact": "主界面已进入B课，右侧仍显示A课聊天；用户可将B课问题发送到A会话，或结束A会话并写A课总结。B课active请求失败后旧内容长期存在且没有加载错误提示。",
+      "repro": [
+        "A课已有打开的侧边会话；保持右侧栏打开，切换到B课。",
+        "延迟或拒绝B课sidechat.active；旧A session仍被渲染且输入可用。"
+      ],
+      "fix": [
+        "按courseId给CourseSideChat加key，并将summary/draft/unsent跟课程身份绑定。",
+        "useLoad区分identity change和same-key refresh；新身份的数据不可继续用于写操作。",
+        "显示active.error并提供重试；mutation前校验数据所属courseId与当前scope相等。"
+      ],
+      "acceptance": [
+        "A/B两课快速切换、加载延迟及失败下，不在B课显示或发送到A会话。",
+        "本课草稿和上次总结不串课；返回A课可恢复其正确会话。"
+      ],
+      "verification": "async-state-result.json复现useLoad在B加载中及失败后保留chat-a；槽稳定身份已核对安装的官方DSH renderer。没有声称已执行真实双课程UI操作。"
+    },
+    {
+      "id": "FE-03",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "后台页面异步补全标题会抢走正在操作的标签页",
+      "evidence": [
+        {
+          "file": "packages/shell/src/client.tsx",
+          "line_start": 385,
+          "line_end": 393,
+          "detail": "setTab无条件激活非active panel。"
+        },
+        {
+          "file": "packages/shell/src/client.tsx",
+          "line_start": 407,
+          "line_end": 412,
+          "detail": "retitle调用setTab。"
+        },
+        {
+          "file": "packages/textbook/src/client.tsx",
+          "line_start": 243,
+          "line_end": 243,
+          "detail": "讲义异步取到标题后frame.setTitle。"
+        },
+        {
+          "file": "packages/library/src/client/reader.tsx",
+          "line_start": 65,
+          "line_end": 66,
+          "detail": "原文异步取到标题后frame.setTitle。"
+        }
+      ],
+      "cause": "标题元数据更新复用了带导航副作用的setTab，隐藏页面也可以执行。",
+      "impact": "打开资料后切到作答页，后台书名/讲义标题返回时会自动切回该页，打断输入和阅读位置。",
+      "repro": [
+        "先激活作答标签；让另一个后台资料标签完成加载并调用frame.setTitle。",
+        "提取真实ShellState配最小dockview panel桩：before=answering-tab，retitle后after=loading-book-tab。"
+      ],
+      "fix": [
+        "分离标题/参数更新与用户导航；retitle路径禁止setActive。",
+        "标题更新不写最近访问顺序，也不切换active或history指针。"
+      ],
+      "acceptance": [
+        "后台文档/讲义标题返回、历史页面补全标题均不改变焦点或当前页。"
+      ],
+      "verification": "retitle-repro.mjs从固定提交动态提取ShellState实现，复用真实tabs函数配最小panel桩；结果after=loading-book-tab、events包含setActive；不是完整Dockview/React UI。原审查的提取副本与动态版结果一致。"
+    },
+    {
+      "id": "FE-04",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "学习变更SSE重连只恢复连接灯，断线期间的数据变更不会补同步",
+      "evidence": [
+        {
+          "file": "packages/shell/src/client.tsx",
+          "line_start": 728,
+          "line_end": 745,
+          "detail": "ready只把feed改为open；只有message才通知订阅者。"
+        },
+        {
+          "file": "packages/core/src/index.ts",
+          "line_start": 115,
+          "line_end": 143,
+          "detail": "事件没有id/sequence；新连接只发送ready，无事件回放。"
+        },
+        {
+          "file": "packages/kit/src/client.ts",
+          "line_start": 44,
+          "line_end": 67,
+          "detail": "useLoad只对收到的feed事件或可见性stale刷新；未收到的事件无法标脏。"
+        }
+      ],
+      "cause": "把载体重新连接当成数据已同步，没有reconnect invalidation或游标补偿。",
+      "impact": "后端在断线时完成导入、讲义或测试，重连后页面可能一直显示旧任务/旧状态，而状态栏显示已连接；隐藏tab和模块级批注缓存也受影响。",
+      "repro": [
+        "打开测试/导入/讲义页，断开学习SSE；在此期间通过另一个连接完成状态变更。",
+        "恢复连接，服务器只发ready且不再发生相关事件；页面保持旧状态。"
+      ],
+      "fix": [
+        "简单可靠的本地方案：每次ready（含重连）发布reset/invalidate，立即刷新可见查询并把隐藏查询标脏。",
+        "若需要增量恢复，再引入单调事件id、有限回放及过期后全量同步。"
+      ],
+      "acceptance": [
+        "断线期间完成导入/交卷/修改批注后重连，无额外用户操作即可一致。",
+        "快速断开恢复不导致成倍订阅、刷新风暴或旧响应覆盖。"
+      ],
+      "verification": "static control-flow review"
+    },
+    {
+      "id": "FE-05",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "useLoad的空refreshOn数组实际订阅了所有事件",
+      "evidence": [
+        {
+          "file": "packages/kit/src/client.ts",
+          "line_start": 44,
+          "line_end": 55,
+          "detail": "[].join('|')变成''；''.split('|')是['']，任何type.startsWith('')均true。"
+        },
+        {
+          "file": "packages/textbook/src/client.tsx",
+          "line_start": 100,
+          "line_end": 104,
+          "detail": "BlockEditor明确传[]，重新加载后的loaded会写回编辑文本。"
+        },
+        {
+          "file": "packages/library/src/client/reader.tsx",
+          "line_start": 71,
+          "line_end": 71,
+          "detail": "pageChunks明确传[]。"
+        },
+        {
+          "file": "packages/goal/src/client.tsx",
+          "line_start": 222,
+          "line_end": 222,
+          "detail": "出处批量读取明确传[]。"
+        }
+      ],
+      "cause": "字符串化筛选列表没有区分空集合和空前缀。",
+      "impact": "只需首次/依赖变化加载的接口被任何feed反复调用；后台任务频繁更新时放大读取。编辑期间后台正文发生改变时，误触发的加载会通过setText覆盖本地草稿。单纯相同字符串重载不会触发这个覆盖，不能夸大为每个事件必丢字。",
+      "repro": [
+        "useLoad(load, deps=[], refreshOn=[])完成首次加载后投递unrelated/event。",
+        "等待150ms去抖，load次数从1变2，预期仍为1。"
+      ],
+      "fix": [
+        "直接使用数组并对空数组不注册feed，或split后过滤空字符串；区分省略参数的默认行为。",
+        "编辑器只有未变脏时才接受后台文本，已编辑时提供冲突提示。"
+      ],
+      "acceptance": [
+        "[]不刷新；缺省参数按learning/刷新；指定前缀只匹配对应事件。",
+        "编辑中收到无关feed不增加blockSource调用也不替换文本。"
+      ],
+      "verification": "async-state-repro.mjs的未改动useLoad+有限hook语义桩，结果beforeFeed=1/afterFeed=2。"
+    },
+    {
+      "id": "FE-06",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "聊天流中断后不会重新订阅；再次发送成功会清掉错误但无法收到回复",
+      "evidence": [
+        {
+          "file": "packages/kit/src/client/chat.tsx",
+          "line_start": 219,
+          "line_end": 244,
+          "detail": "follow异步循环退出只设error/loaded；effect只依赖remote/sessionId，没有重连或重试。"
+        },
+        {
+          "file": "packages/kit/src/client/chat.tsx",
+          "line_start": 246,
+          "line_end": 259,
+          "detail": "发送成功不重建follow，并预先清error/setBusy(true)。"
+        },
+        {
+          "file": "packages/kit/src/client/chat.tsx",
+          "line_start": 321,
+          "line_end": 321,
+          "detail": "Composer在连接失败后仍可发送。"
+        },
+        {
+          "file": ".tools/dsh/node_modules/@deepseek-ai/dsh-api-gateway/lib/client.js",
+          "line_start": 346,
+          "line_end": 356,
+          "detail": "固定DSH依赖的物理重连会failAll逻辑流。"
+        },
+        {
+          "file": ".tools/dsh/node_modules/@deepseek-ai/dsh-api-gateway/lib/client.js",
+          "line_start": 957,
+          "line_end": 1062,
+          "detail": "官方RemoteStream封装才负责跨载体generation重开逻辑流。"
+        }
+      ],
+      "cause": "自定义Chat直接调用一次性remote.session.follow，没有使用DSH的SessionEventStream/RemoteJournalStream重连协议。",
+      "impact": "短时掉线/服务重启后主老师和侧边聊天需要重挂载才能继续实时更新。中断发生在turn/start后时busy不复位；发送新问题即使成功，也清掉原有错误而界面继续等待。",
+      "repro": [
+        "follow先发snapshot、turn/start，然后抛载体异常。",
+        "恢复载体并rerender同session，再send成功；follow调用数仍1，busy=true，error已变null。"
+      ],
+      "fix": [
+        "优先复用官方会话流生命周期与cursor/assistant baseline处理；或显式在载体恢复后重订阅并校验序号。",
+        "连接状态与模型运行状态拆开；中断显示重连/重试动作，发送成功不掩盖仍断开的订阅。"
+      ],
+      "acceptance": [
+        "老师回复中断网、恢复后新旧消息都能补齐且不重复。",
+        "服务重启后无须关闭页面即可接收下一次回复；终止或异常不遗留永久busy。"
+      ],
+      "verification": "chat-repro.mjs提取Chat状态/effect（JSX换为状态观测），chat-result.json记录followCalls=1、成功发送后busy=true/error=null；官方固定版本传输代码静态核对。"
+    },
+    {
+      "id": "FE-07",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "聊天只显示DSH默认最近50条消息，重开后更早历史无入口",
+      "evidence": [
+        {
+          "file": "packages/kit/src/client/chat.tsx",
+          "line_start": 19,
+          "line_end": 28,
+          "detail": "自定义Frame没有hasMore/cursor，SessionRemote没有page。"
+        },
+        {
+          "file": "packages/kit/src/client/chat.tsx",
+          "line_start": 221,
+          "line_end": 225,
+          "detail": "follow未指定历史窗口，snapshot只遍历records。"
+        },
+        {
+          "file": ".tools/dsh/node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js",
+          "line_start": 1373,
+          "line_end": 1374,
+          "detail": "固定版本默认MAX_MESSAGES=50。"
+        },
+        {
+          "file": ".tools/dsh/node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js",
+          "line_start": 1506,
+          "line_end": 1519,
+          "detail": "opening snapshot分页后返回records与hasMore。"
+        }
+      ],
+      "cause": "将有限历史窗口当成完整聊天记录，没有按cursor向前翻页；手写窄接口隐藏了上游协议字段。",
+      "impact": "同一课长期聊天超过50条user/assistant消息，刷新/重开后早期目标协商、反馈和出处无法在界面查看。磁盘记录没有因此删除。",
+      "repro": [
+        "60条append-origin合成消息输入官方DSH paginate，默认返回50条，first seq=10、hasMore=true。",
+        "应用既不读取hasMore，也无page/加载更早入口。"
+      ],
+      "fix": [
+        "保留完整上游typed协议；显示“加载更早”并用throughSeq/beforeSeq分页，保持滚动锚点。",
+        "长期会话按页/虚拟化显示；同时处理assistantStream opening baseline，避免重开时丢掉已生成的流片段。"
+      ],
+      "acceptance": [
+        "至少120条消息会话能逐页回到第一条，刷新后历史仍可浏览且无重复。",
+        "加载上一页不跳滚动位置，失败可重试。"
+      ],
+      "verification": "chat-repro.mjs实际提取安装的官方DSH paginate并调用真实isAppendSurfaceEvent；chat-result.json返回50/60。"
+    },
+    {
+      "id": "FE-08",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "讲义/试题插图的PDF缓存永不释放，绕过项目已有的借用释放机制",
+      "evidence": [
+        {
+          "file": "packages/library/src/client/figure.tsx",
+          "line_start": 13,
+          "line_end": 29,
+          "detail": "模块级Map保存成功PDFDocumentProxy Promise，只有失败时删除。"
+        },
+        {
+          "file": "packages/library/src/client/figure.tsx",
+          "line_start": 45,
+          "line_end": 85,
+          "detail": "组件cleanup只取消render，无doc.destroy/release。"
+        },
+        {
+          "file": "packages/library/src/client/documents.ts",
+          "line_start": 5,
+          "line_end": 35,
+          "detail": "阅读器已有按引用计数借用、最后使用30秒后destroy的共享实现。"
+        }
+      ],
+      "cause": "Figure另起永久cache，生命周期与组件/标签无关，还与Reader的document cache重复。",
+      "impact": "长时间跨多本教材/题目浏览会保留越来越多PDF document/worker资源；关闭tab也不释放。会推高内存，未进行浏览器heap测量，不能声称已经发生崩溃。",
+      "repro": [
+        "浏览来自许多不同sourceId的插图，再关闭对应页面。",
+        "源码生命周期显示成功项持续留在module Map；不存在可执行释放路径。"
+      ],
+      "fix": [
+        "Figure复用borrowDocument并在cleanup调用release，必要时给共享缓存加字节/文档数上限。",
+        "并行插图绘制设并发界限；全页临时canvas裁切的峰值内存另做测量后优化。"
+      ],
+      "acceptance": [
+        "打开/关闭多本PDF插图后，超过释放宽限期document/worker数量回落。",
+        "同一PDF同时在Reader和Figure只借用一次，常用切换不频繁重新下载。"
+      ],
+      "verification": "static control-flow review"
+    },
+    {
+      "id": "FE-09",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_accessibility_gap",
+      "title": "菜单和命令面板只有视觉高亮，焦点语义与模态键盘行为不完整",
+      "evidence": [
+        {
+          "file": "packages/kit/src/client/ui.tsx",
+          "line_start": 169,
+          "line_end": 206,
+          "detail": "菜单show/move只setActive，未把焦点交给菜单项，也未建立aria-activedescendant。"
+        },
+        {
+          "file": "packages/kit/src/client/ui.tsx",
+          "line_start": 226,
+          "line_end": 228,
+          "detail": "菜单项data-active仅是CSS状态。"
+        },
+        {
+          "file": "packages/shell/src/client.tsx",
+          "line_start": 1467,
+          "line_end": 1501,
+          "detail": "Palette自动focus输入、仅输入处理Esc/arrows；无focus trap/restore，combobox无aria-activedescendant。"
+        },
+        {
+          "file": "packages/shell/src/client.tsx",
+          "line_start": 998,
+          "line_end": 1020,
+          "detail": "可拖动separator无tabIndex、键盘或aria-valuenow/min/max。"
+        }
+      ],
+      "cause": "实现了鼠标与可见按键响应，但没有统一的复合控件焦点模型；aria-modal只是声明，没有封闭焦点或背景inert。",
+      "impact": "读屏无法可靠跟随箭头选择；Tab可离开标为模态的面板，焦点到option后Esc处理不再来自输入；仅键盘用户不能调整侧栏宽度。",
+      "repro": [
+        "Ctrl+K后用上下键：观察只有data-active改变，输入没有aria-activedescendant。",
+        "在Palette中按Tab移入选项再Esc，或继续Tab离开弹层；代码没有弹层级Esc/focus封闭。",
+        "打开共享菜单后检查document.activeElement与可访问性焦点。"
+      ],
+      "fix": [
+        "菜单使用roving tabindex+真实focus或menu aria-activedescendant；稳定option id。",
+        "Palette实现模态focus trap、恢复触发焦点、容器级Esc、背景inert；combobox明确active descendant。",
+        "separator支持键盘增减和范围值，补同类tab语义与错误提示live region。"
+      ],
+      "acceptance": [
+        "真实浏览器键盘全流程与至少一种读屏核对；视觉active和读屏焦点相同。",
+        "Tab/Shift+Tab在模态内循环，任意内部焦点Esc关闭并恢复焦点。"
+      ],
+      "verification": "实际Chromium连接本地DSH的1440px浅色空库中复现：ArrowDown后焦点仍在INPUT且aria-activedescendant=null；Tab进入option再Esc面板仍打开；输入框Shift+Tab跳到背后“新建第一门课”；菜单ArrowDown后焦点仍在“外观”触发按钮而视觉active为“跟随系统”。原始结果ui/report.json，截图ui/palette-1440-light.png。未做屏幕阅读器实测，separator仅静态检查。标准依据W3C APG menu-button/dialog-modal/combobox。"
+    },
+    {
+      "id": "FE-10",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_accessibility_gap",
+      "title": "全局弱化文字色在常用背景上低于普通文字4.5:1对比度",
+      "evidence": [
+        {
+          "file": "packages/shell/src/shell.css",
+          "line_start": 7,
+          "line_end": 21,
+          "detail": "浅色背景#fff/#f7f7f4与text3=#8c8a83。"
+        },
+        {
+          "file": "packages/shell/src/shell.css",
+          "line_start": 89,
+          "line_end": 102,
+          "detail": "深色背景#1b1b1a/#232321与text3=#807e78。"
+        },
+        {
+          "file": "packages/shell/src/shell.css",
+          "line_start": 1515,
+          "line_end": 1520,
+          "detail": "资料元数据/检索头使用text3和12px字号。"
+        },
+        {
+          "file": "packages/shell/src/shell.css",
+          "line_start": 1541,
+          "line_end": 1560,
+          "detail": "页码、侧栏标题、出处路径使用text3和12px。"
+        }
+      ],
+      "cause": "设计规范把text3当作可用于正文的最浅文字，但token未按各主题/背景对比度校验。",
+      "impact": "重要页码、来源信息、说明的可读性受损。计算值浅色页3.455:1、浅色chrome3.219:1、深色页4.246:1、深色raised3.879:1；这些12px文本不适用大字3:1例外。",
+      "repro": [
+        "以源码sRGB颜色按W3C相对亮度公式计算，contrast-repro.mjs输出contrast.json。"
+      ],
+      "fix": [
+        "调整文字专用色使实际所有常用底色达到4.5:1，装饰token单独保留。",
+        "给设计tokens加对比度校验，并结合深浅色、低视力/高对比场景实测。"
+      ],
+      "acceptance": [
+        "所有信息性小字与实际背景至少4.5:1；不将禁用/纯装饰项计入同一标准。"
+      ],
+      "verification": "源码色值计算，非截图感受；已读取W3C WCAG22 Understanding SC1.4.3。未声称整个应用通过或不通过完整WCAG审计。"
+    },
+    {
+      "id": "FE-11",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "不可编辑的原书段落进入编辑器后永久显示加载占位",
+      "evidence": [
+        {
+          "file": "packages/textbook/src/client.tsx",
+          "line_start": 99,
+          "line_end": 107,
+          "detail": "refused响应没有text，text状态undefined；106先返回Skeleton，107拒绝说明不可达。"
+        },
+        {
+          "file": "packages/textbook/src/client.tsx",
+          "line_start": 395,
+          "line_end": 397,
+          "detail": "选区浮条对所有段落提供修改按钮。"
+        },
+        {
+          "file": "packages/textbook/src/index.ts",
+          "line_start": 479,
+          "line_end": 482,
+          "detail": "原书原文block.original明确返回refused。"
+        }
+      ],
+      "cause": "把“尚未初始化text”用作全部分支的加载条件，拒绝分支排在它之后。",
+      "impact": "用户选择原书引用点击修改，既无法编辑也看不到“不能改/可以批注”的解释和关闭按钮，只见永久加载。",
+      "repro": [
+        "给blockSource返回{refused:\"这是原书原文…\"}；初始text=undefined，加载完成仍命中第106行。"
+      ],
+      "fix": [
+        "先分支处理source.error/loading/refused，只有可编辑{text}再初始化草稿；保留显式关闭。"
+      ],
+      "acceptance": [
+        "original与block-missing两种refused均显示原因和退出入口，没有Skeleton悬挂；正常块编辑不受影响。"
+      ],
+      "verification": "static control-flow review"
+    },
+    {
+      "id": "AN-01",
+      "severity": "P1",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "读取批注时的异步位置重算会覆盖并发保存的新内容，甚至恢复刚删除的批注",
+      "evidence": [
+        {
+          "file": "packages/annotation/src/index.ts",
+          "line_start": 230,
+          "line_end": 240,
+          "detail": "list读取整条annotation后await place，位置变更时把旧annotation整条save。"
+        },
+        {
+          "file": "packages/annotation/src/index.ts",
+          "line_start": 91,
+          "line_end": 92,
+          "detail": "save覆盖data整列。"
+        },
+        {
+          "file": "packages/annotation/src/index.ts",
+          "line_start": 251,
+          "line_end": 271,
+          "detail": "edit/hide同步修改同一data；没有revision/CAS。"
+        }
+      ],
+      "cause": "查询路径持有旧对象跨越await，随后回写完整数据；没有只更新location或并发版本检查。",
+      "impact": "后台刷新与用户编辑/隐藏同时发生且原文位置改变时，已确认保存的新批注被旧文本覆盖，hiddenAt也可被抹除，界面删除的批注重新出现。读取产生数据丢失。",
+      "repro": [
+        "创建旧批注，改正文使定位从anchored变为needs-confirmation。",
+        "启动list并在learnTextbook.block的await处暂停；此时edit为新文字并hide=true。",
+        "释放list：持久化text回到旧批注，hidden=false。"
+      ],
+      "fix": [
+        "定位结果仅通过SQL JSON路径或重读最新记录后合并location；用户字段不可由读取覆盖。",
+        "若定位取决于已改字段，使用版本/CAS重算并重试；位置派生缓存可考虑只读计算不落盘。",
+        "同类跨await全记录save（如submitError）一起检查。"
+      ],
+      "acceptance": [
+        "用屏障注入并发：list期间edit/hide/resolve/linkSideChat完成后，所有用户字段保持最新值。",
+        "位置仍能更新，不发无限刷新事件。"
+      ],
+      "verification": "annotation-audit.test.ts使用本仓库真实业务服务、实际SQLite/文件与harness假DSH；3项定向特征测试之一已通过，结果annotation-result.json中明确new→old、hidden true→false。"
+    },
+    {
+      "id": "AN-02",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "报错批注的并发提交可创建两个提案，只保留最后一个关联",
+      "evidence": [
+        {
+          "file": "packages/annotation/src/index.ts",
+          "line_start": 396,
+          "line_end": 417,
+          "detail": "先读取annotation.proposalId，再经过两次await，事务中未重读/唯一约束即创建proposal并覆盖关联。"
+        },
+        {
+          "file": "packages/annotation/src/index.ts",
+          "line_start": 427,
+          "line_end": 438,
+          "detail": "ask有并发共享Map，而submitError没有相同的保护。"
+        }
+      ],
+      "cause": "幂等检查发生在异步操作之前，事务只包创建写入，没有把“是否已存在”判定与创建原子化。",
+      "impact": "同一批注出现重复教师核对任务/重复handoff，早创建的提案没有批注关联，处理状态可能与界面脱节。单个按钮busy不能保证多标签/重试/多个调用方幂等。",
+      "repro": [
+        "先创建位置不确定的error批注，避免自动创建proposal；正文改成唯一可定位。",
+        "同时Promise.all调用两次submitError；实际返回不同ID，提案总数2，批注只指向第二个。"
+      ],
+      "fix": [
+        "在事务内重读最新proposalId，再create并关联；为annotation→proposal增加唯一约束或稳定幂等key。",
+        "进程内共享Promise只做优化，数据库约束承担最后保证；关联时合并最新用户字段。"
+      ],
+      "acceptance": [
+        "同一批注并发10次/响应丢失后重试，只产生一个proposal和一次handoff，所有成功调用返回同一ID。"
+      ],
+      "verification": "annotation-audit.test.ts真实服务+SQLite确认2条proposal，annotation-result.json记录不同ID；无真模型。"
+    },
+    {
+      "id": "AN-03",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "confirmed_bug",
+      "title": "段首新增否定词后批注仍被自动认定为原句，保守锚定规则失效",
+      "evidence": [
+        {
+          "file": "packages/annotation/src/anchor.ts",
+          "line_start": 122,
+          "line_end": 128,
+          "detail": "唯一匹配时只有prefix非空才检查左邻字符，空prefix没有保护原段首边界。"
+        },
+        {
+          "file": "packages/annotation/test/anchor.test.ts",
+          "line_start": 43,
+          "line_end": 50,
+          "detail": "已有否定测试只覆盖非空prefix的“这里不能忽略”，漏掉段首。"
+        }
+      ],
+      "cause": "空上下文同时表示原文边界和缺少上下文，定位算法把它统一当作无需检查。",
+      "impact": "原句“能忽略摩擦损失。”变为“不能忽略摩擦损失。”时，原批注仍anchored，误导用户以为旧理解或重点仍适用于当前结论；违背宁可确认也不挂错的产品原则。",
+      "repro": [
+        "locateQuote(\"能忽略摩擦损失。\", {exact:\"能忽略摩擦损失\",prefix:\"\",suffix:\"。\"}) → anchored/start0。",
+        "改为“不能忽略摩擦损失。”同一selector → anchored/start1；预期needs-confirmation。"
+      ],
+      "fix": [
+        "选择器明确记录起止边界/创建时上下文完整性；段落hash变更后检查边界新增的语义字符。",
+        "在无法区分缺少上下文与段首时，保守进入确认；不要仅凭原句是新句子子串就自动迁移。"
+      ],
+      "acceptance": [
+        "段首加不/非、段尾续写条件、公式符号变化及重复句场景均不会未经确认自动挂到改变含义的句子。"
+      ],
+      "verification": "annotation-audit.test.ts直接调用真实anchor函数，annotation-result.json记录start0→start1仍anchored。"
+    },
+    {
+      "id": "ENG-01",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "maturity_gap",
+      "title": "仓库内未配置持续集成门禁，自动验收缺少真实DSH与React交互",
+      "evidence": [
+        {
+          "file": "tests/harness.ts",
+          "line_start": 100,
+          "line_end": 170,
+          "detail": "传输/会话/模型均使用假实现。"
+        },
+        {
+          "file": "tests/harness.ts",
+          "line_start": 173,
+          "line_end": 186,
+          "detail": "直接依次调用各unit.apply，绕开真实plugin loader/inject/exports/组合包装配。"
+        },
+        {
+          "file": "tests/harness.ts",
+          "line_start": 188,
+          "line_end": 212,
+          "detail": "调用route.fetch而非实际HTTP/auth/stream载体。"
+        },
+        {
+          "file": "vitest.config.ts",
+          "line_start": 14,
+          "line_end": 23,
+          "detail": "只列入.test.ts，已有测试主要服务/纯函数，未见真实React交互/端到端suite。"
+        },
+        {
+          "file": "docs/development.md",
+          "line_start": 43,
+          "line_end": 58,
+          "detail": "当前流程为手动typecheck/test/build与截图脚本。"
+        }
+      ],
+      "cause": "已有测试对业务规则投入充足，但边界替身承担了最容易漂移的运行时协议；仓库没有tracked .github/workflows等自动门禁。",
+      "impact": "全量单测通过不能证明安装、插件实际注入、流重连、菜单焦点、草稿时序正确；本次发现的多项UI/DSH协议问题位于此盲区。不能据此否定现有测试的业务价值。",
+      "repro": [
+        "git ls-files检查无.github/workflows；测试目录67个.test.ts文件，没有tracked真实React/browser interaction suite。",
+        "对比harness直接apply与packages/app真实profile加载路径。"
+      ],
+      "fix": [
+        "加入最小可复现CI：固定Node/pnpm，frozen安装、typecheck、tests、build。",
+        "另起合成数据+假模型的真实DSH smoke，校验插件状态/页面接口/聊天流；保持付费网络默认禁止。",
+        "增加高风险浏览器场景：课程切换、保存失败/乱序、断线重连、50+消息、键盘模态和后台tab标题。"
+      ],
+      "acceptance": [
+        "干净runner一条命令自动执行门禁并产出报告；故意破坏inject或UI状态机时相关门禁确实失败。",
+        "不要求为了覆盖率而给每个样式或简单getter写镜像测试。"
+      ],
+      "verification": "跟踪文件盘点和测试调用链静态审查；构建、类型检查与全套测试的实际结果见本报告第二节。"
+    },
+    {
+      "id": "ENG-02",
+      "severity": "P2",
+      "confidence": "high",
+      "classification": "reproducibility_gap",
+      "title": "DSH仅锁顶层版本和发布时间上限，运行时依赖图与工具版本尚未完整固定",
+      "evidence": [
+        {
+          "file": "scripts/setup-dsh.sh",
+          "line_start": 7,
+          "line_end": 21,
+          "detail": "用--before规避已知不兼容发布，npm install解析到被忽略的.tools/dsh；已有安装只检查DSH顶层version。"
+        },
+        {
+          "file": "README.md",
+          "line_start": 34,
+          "line_end": 43,
+          "detail": "文档要求Node24/pnpm11，但安装命令不是frozen默认说明。"
+        },
+        {
+          "file": "package.json",
+          "line_start": 1,
+          "line_end": 27,
+          "detail": "无engines/packageManager字段。"
+        }
+      ],
+      "cause": "源码pnpm-lock与外部DSH npm依赖图分离，后者的锁文件不随仓库保存；未验证实际兼容的完整runtime graph或工具小版本。",
+      "impact": "不同机器/历史安装可能拥有相同DSH版本但不同传递依赖，出现类型、插件或运行时差异。--before是有价值的缓解，不等同版本+integrity完整锁定；本次未证明任意fresh install必然不同。",
+      "repro": [
+        "setup脚本只比较require(dsh/package.json).version；传递依赖被改动时仍会打印already installed。",
+        "git tracked中没有用于.tools/dsh的锁文件；生成锁只存在机器本地。"
+      ],
+      "fix": [
+        "把runtime依赖manifest/lock作为受版本控制的bootstrap资产，用npm ci与hash校验安装到.tools/dsh。",
+        "packageManager固定受支持pnpm版本，engines声明Node；记录Windows/Git Bash/Chrome支持边界。",
+        "依赖更新用独立兼容性变更，跑真实DSH smoke。"
+      ],
+      "acceptance": [
+        "在相同受支持平台和固定工具链上，两台干净环境得到一致DSH依赖清单与integrity；跨平台可选依赖差异有明确说明；既有不匹配安装被检测。",
+        "README从无key新克隆可完成离线/假服务开发验证，真实模型验收另列。"
+      ],
+      "verification": "static control-flow review"
+    },
+    {
+      "id": "ENG-03",
+      "severity": "P3",
+      "confidence": "high",
+      "classification": "governance_gap",
+      "title": "公开仓库缺少明确许可证和基本维护入口",
+      "evidence": [
+        {
+          "file": "README.md",
+          "line_start": 1,
+          "line_end": 9,
+          "detail": "项目与开发链接齐备，但无许可证/维护入口说明。"
+        },
+        {
+          "file": "package.json",
+          "line_start": 1,
+          "line_end": 27,
+          "detail": "private=true，未声明license；tracked文件盘点未发现LICENSE/SECURITY/CONTRIBUTING/CODEOWNERS/CHANGELOG。"
+        }
+      ],
+      "cause": "个人早期项目重视交接给助手的规则，但对外部读者的使用许可、问题提报与维护责任没有同等明确说明。",
+      "impact": "协作与复用预期不清，安全问题没有约定私下反馈入口；不是本地运行功能故障，也不因未发布npm/没有公网服务而扣分。",
+      "repro": [
+        "git ls-files盘点许可证及维护文件为空；README无对应章节。"
+      ],
+      "fix": [
+        "由作者明确代码是否允许开放复用并选定许可证；助手不擅自替作者选择。",
+        "简短CONTRIBUTING和SECURITY说明开发入口、复现材料、报告渠道；CHANGELOG/版本策略在实际发布前建立。"
+      ],
+      "acceptance": [
+        "README可直接找到作者明确的许可决定和问题反馈路径；说明当前仅本地单用户的支持范围。"
+      ],
+      "verification": "static control-flow review"
+    }
+  ]
+}
