@@ -3,7 +3,7 @@
 // turn gets a one-line update; handoffs are stored, retried and sent again after a restart; a stage
 // session is introduced on its first wake-up unless the teacher already spoke there; a failed session
 // creation does not leave the course pointing at a session DSH never made. Synthetic data, fake model.
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { BRIEF_SOURCE, briefAction, fingerprint, foldBrief, type BriefState } from '../../packages/tutor/src/brief.ts'
 import { createHarness, type Harness } from '../harness.ts'
 import { lessonCourse, lessonText } from '../lesson-setup.ts'
@@ -15,7 +15,7 @@ const GOAL = {
 }
 
 let h: Harness | undefined
-afterEach(() => h?.dispose())
+afterEach(() => { h?.dispose(); vi.useRealTimers() })
 
 function reply(call: { purpose: string }): string {
   throw new Error(`unexpected model call: ${call.purpose}`)
@@ -83,7 +83,11 @@ it('injects the brief only when the model cannot see the same one, and updates t
   expect((await h.preStep(side.sessionId)).map(item => item.source)).not.toContain(BRIEF_SOURCE)
 })
 
+// A failed delivery is retried after 2 s. The fake clock runs at real speed and skips ahead to the retry.
+const skippingClock = () => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
+
 it('keeps handoffs until they are delivered: merged per course, retried after a failure, sent again after a restart', async () => {
+  skippingClock()
   h = createHarness(reply)
   const { ctx } = h
   const a = await newCourse(h)
@@ -108,7 +112,7 @@ it('keeps handoffs until they are delivered: merged per course, retried after a 
   await h.settle()
   expect(h.delivered.some(item => item.text.includes('甲三'))).toBe(false)
   controller.resolveAgent = resolve
-  await h.settle(2300)
+  await vi.advanceTimersByTimeAsync(2300)
   expect(h.delivered.filter(item => item.text.includes('甲三'))).toHaveLength(1)
 
   // Received but not sent when DSH stopped: sent once after the restart; what was sent is not sent again.
@@ -125,6 +129,7 @@ it('keeps handoffs until they are delivered: merged per course, retried after a 
 })
 
 it('introduces a stage on its first wake-up unless the teacher already spoke there', async () => {
+  skippingClock()
   h = createHarness(call => lessonText(call) ?? reply(call))
   const { ctx } = h
   // DSH refuses the first wake-up of the new stage session; meanwhile the learner opened the teacher
@@ -138,7 +143,7 @@ it('introduces a stage on its first wake-up unless the teacher already spoke the
   expect(session).toBeTruthy()
   h.sessions.get(session)!.events.push({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '我们开始阶段 1。' }] } } })
   controller.resolveAgent = resolve
-  await h.settle(2300)
+  await vi.advanceTimersByTimeAsync(2300)
   const late = h.delivered.filter(item => item.sessionId === session)
   expect(late.at(-1)?.text).toContain(`讲义 ${stage.title} 已生成`)
   expect(late.at(-1)?.text).not.toContain('第一次课')

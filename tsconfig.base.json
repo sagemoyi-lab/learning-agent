@@ -1,7 +1,9 @@
 {
   // Shared compiler options. Host and browser code are checked as two programs
   // (tsconfig.host.json, tsconfig.client.json) because DSH declares `ctx.connection` differently on each side.
-  // Type-check only; esbuild (scripts/build.mjs) produces the runtime bundles.
+  // Type-check only; esbuild (scripts/build.mjs) produces the runtime bundles. Incremental: each program keeps
+  // what it checked in node_modules/.cache/tsc (named in tsconfig.host.json and tsconfig.client.json), so a
+  // second run checks only what changed.
   // DSH packages are type-only here: they resolve from the pinned DSH install in .tools/dsh,
   // never from our own node_modules, so DSH's runtime always supplies the single live copy.
   "compilerOptions": {
@@ -18,6 +20,7 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "incremental": true,
     "types": ["node"],
     "baseUrl": ".",
     "paths": {

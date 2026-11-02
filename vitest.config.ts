@@ -15,6 +15,12 @@ export default defineConfig({
     // Tests never reach paid online services: the harness gives the library local parsing and no
     // semantic search, and parser and embedding tests use fake endpoints.
     include: ['packages/*/test/**/*.test.ts', 'tests/**/*.test.ts'],
+    // Test files in one worker share the loaded units instead of loading all of them again per file,
+    // which took more time than the tests themselves. A test that changes a global puts it back
+    // (docs/development.md, 测试); stubbed globals and env vars are put back automatically.
+    isolate: false,
+    unstubGlobals: true,
+    unstubEnvs: true,
     // `pnpm coverage`: what the tests never run, read as candidates for deletion (docs/development.md).
     coverage: {
       provider: 'v8',

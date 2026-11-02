@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { complete, defaultModel, routeOf, secret } from '../src/index.ts'
 import { roleModel, Schema } from '../src/settings.ts'
@@ -21,7 +21,7 @@ function withModel(): { ctx: Context; routed: string[] } {
 const ask = (ctx: Context, model?: string) => complete(ctx, { system: 's', prompt: 'p', purpose: 'test', ...(model === undefined ? {} : { model }) })
 
 describe('role models', () => {
-  afterEach(() => { delete process.env.LEARNING_TEST_KEY })
+  afterEach(() => { delete process.env.LEARNING_TEST_KEY; vi.useRealTimers() })
 
   it('reads a role setting as provider/model, keeping slashes in the model id', () => {
     expect(routeOf('deepseek-official/deepseek-flash')).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
@@ -69,12 +69,16 @@ describe('role models', () => {
         yield { type: 'finish', reason: { kind: 'stop' } }
       },
     })
-    await expect(ask(ctx, 'relay/flaky')).resolves.toBe('好')
+    // The retry waits 2 s; the fake clock skips the wait.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const flaky = ask(ctx, 'relay/flaky')
+    await vi.advanceTimersByTimeAsync(2000)
+    await expect(flaky).resolves.toBe('好')
     expect(attempts).toEqual(['flaky', 'flaky'])
     attempts.length = 0
     await expect(ask(ctx, 'relay/refuses')).rejects.toThrow(/context too long/)
     expect(attempts).toEqual(['refuses'])
-  }, 10_000)
+  })
 
   it('keeps a call\'s output budget within the cap set for the model, and says so when that cap cuts a reply short', async () => {
     const budgets: number[] = []

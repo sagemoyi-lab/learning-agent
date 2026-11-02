@@ -1,5 +1,6 @@
 {
   "extends": "./tsconfig.base.json",
+  "compilerOptions": { "tsBuildInfoFile": "node_modules/.cache/tsc/client.tsbuildinfo" },
   "include": [
     "types",
     "packages/*/src/client.ts",
