@@ -16,6 +16,7 @@ declare module '@deepseek-ai/dsh-jobs' {
 
 export class LibraryImports {
   private readonly running = new Map<string, AbortController>()
+  private readonly activeParsers = new Map<string, MineruParser>()
   private disposed = false
   private readonly parserNow: () => Promise<MineruParser>
   /**
@@ -61,7 +62,7 @@ export class LibraryImports {
   retry(id: string): void {
     const task = this.store.importTask(id)
     if (this.running.has(id) || task.status === 'ready') return
-    this.change(task, { status: 'queued', message: '准备重试', ...(task.status === 'failed' || task.status === 'canceled' ? { remoteId: undefined } : {}) })
+    this.change(task, { status: 'queued', message: '准备重试', deadlineAt: undefined, ...(task.status === 'failed' || task.status === 'canceled' ? { remoteId: undefined, service: undefined, remoteCancellation: undefined } : {}) })
     this.start(id)
   }
 
@@ -84,7 +85,7 @@ export class LibraryImports {
     // The new snapshot takes the old one's place in this course, in the same role (a skeleton stays a skeleton).
     const role = courseId ? this.store.courseSources(courseId).find(entry => entry.sourceId === sourceId)?.role : undefined
     const now = new Date().toISOString()
-    const task = this.store.saveImport(LibraryImport.parse({ ...base, pageOffset: source.pageOffset, id: randomUUID(), courseId, role, reparseOf: sourceId, remoteId: undefined, sourceId: undefined, status: 'queued', message: '重新解析；原出处继续可用', createdAt: now, updatedAt: now }))
+    const task = this.store.saveImport(LibraryImport.parse({ ...base, pageOffset: source.pageOffset, id: randomUUID(), courseId, role, reparseOf: sourceId, remoteId: undefined, service: undefined, deadlineAt: undefined, remoteCancellation: undefined, sourceId: undefined, status: 'queued', message: '重新解析；原出处继续可用', createdAt: now, updatedAt: now }))
     const folder = this.store.importFolder(task.id)
     mkdirSync(folder, { recursive: true })
     copyFileSync(original, join(folder, 'original.pdf'))
@@ -96,11 +97,19 @@ export class LibraryImports {
   cancel(id: string): void {
     const task = this.store.importTask(id)
     if (task.status === 'ready' || task.status === 'canceled') return
-    this.change(task, { status: 'canceled', message: '已取消，原 PDF 保留，可重试' })
+    this.change(task, { status: 'canceled', remoteCancellation: task.remoteId ? 'pending' : undefined, message: task.remoteId ? '本地已停止，正在请求远端取消；原 PDF 保留' : '已取消，原 PDF 保留，可重试' })
     this.running.get(id)?.abort()
     const remoteId = task.remoteId
-    // Best effort: the service drops abandoned jobs on its own.
-    if (remoteId) void this.parserNow().then(parser => parser.cancel(remoteId)).catch(() => {})
+    if (remoteId) void (async () => {
+      try {
+        const parser = this.activeParsers.get(id) ?? await this.parserNow()
+        if (!task.service || task.service.url !== parser.url.href || task.service.kind !== (parser.cloud ? 'cloud' : 'local')) throw new Error('原解析服务当前不可用')
+        await parser.cancel(remoteId)
+        this.change(this.store.importTask(id), { remoteCancellation: 'confirmed', message: '远端已接受取消请求；原 PDF 保留，可重试，是否仍计费需以服务为准' })
+      } catch {
+        this.change(this.store.importTask(id), { remoteCancellation: 'unconfirmed', message: '本地已停止，远端取消没有确认；原 PDF 保留，远端可能仍在运行' })
+      }
+    })()
   }
 
   dispose(): void {
@@ -112,7 +121,7 @@ export class LibraryImports {
     if (this.running.has(id) || this.disposed) return
     const controller = new AbortController()
     this.running.set(id, controller)
-    const run = (progress: (text: string) => void) => this.run(id, controller.signal, progress).finally(() => this.running.delete(id))
+    const run = (progress: (text: string) => void) => this.run(id, controller.signal, progress).finally(() => { this.running.delete(id); this.activeParsers.delete(id) })
     if (this.ctx.jobs) {
       try { this.ctx.jobs.start({
         kind: 'library-import', label: `解析《${this.store.importTask(id).title}》`,
@@ -131,6 +140,9 @@ export class LibraryImports {
 
   private async run(id: string, signal: AbortSignal, progress: (text: string) => void): Promise<void> {
     let task = this.store.importTask(id)
+    const deadlineAt = task.deadlineAt ?? new Date(Date.now() + 2 * 60 * 60_000).toISOString()
+    const remaining = Math.max(1, Date.parse(deadlineAt) - Date.now())
+    signal = AbortSignal.any([signal, AbortSignal.timeout(remaining)])
     const update = (patch: Partial<LibraryImport>) => {
       signal.throwIfAborted()
       task = this.change(task, patch)
@@ -145,6 +157,12 @@ export class LibraryImports {
         return
       }
       const parser = await this.parserNow()
+      if (task.service && (task.service.url !== parser.url.href || task.service.kind !== (parser.cloud ? 'cloud' : 'local'))) {
+        update({ status: 'failed', message: '任务属于原解析服务，当前服务已切换；未向新服务查询旧任务号，请切回原服务或重新提交' })
+        return
+      }
+      this.activeParsers.set(id, parser)
+      update({ service: task.service ?? { url: parser.url.href, kind: parser.cloud ? 'cloud' : 'local', ...(task.remoteId ? { inferred: true } : {}) }, deadlineAt })
       const folder = this.store.importFolder(id)
       const original = join(folder, 'original.pdf')
       const finish = (result: { parsed: string; assets: string }) => {

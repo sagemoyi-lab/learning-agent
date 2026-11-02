@@ -150,6 +150,35 @@ describe('durable PDF imports', () => {
     expect(submissions).toBe(1)
   })
 
+  it('cancels on the original parser after settings switch and refuses old job lookup on a new service', async () => {
+    manager.dispose()
+    let chosen = new LocalMineru('http://localhost:3184')
+    manager = new LibraryImports(ctx, store, async () => chosen, 5)
+    status = 'running'
+    const task = manager.accept(upload(), input)
+    await vi.waitFor(() => expect(store.importTask(task.id).remoteId).toBe('j1'))
+    expect(store.importTask(task.id).service?.url).toBe('http://localhost:3184/')
+    chosen = new LocalMineru('http://localhost:3185')
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: URL | string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') { calls.push(new URL(url).origin); return Response.json({}) }
+      return Response.json({ job_id: 'j1', status: 'running', files: [] })
+    }))
+    manager.cancel(task.id)
+    await vi.waitFor(() => expect(store.importTask(task.id).remoteCancellation).toBe('confirmed'))
+    expect(calls).toEqual(['http://localhost:3184'])
+    await new Promise(resolve => setTimeout(resolve, 15))
+    const canceled = store.importTask(task.id)
+    store.saveImport({ ...canceled, status: 'parsing' })
+    manager.dispose()
+    manager = new LibraryImports(ctx, store, async () => chosen, 5)
+    const before = remoteIds.length
+    manager.resume()
+    await wait(task.id, 'failed')
+    expect(store.importTask(task.id).message).toContain('未向新服务查询旧任务号')
+    expect(remoteIds.length).toBe(before)
+  })
+
   it('resubmits the saved original if the parser lost its job after restart', async () => {
     status = 'missing'; const task = manager.accept(upload(), input); await wait(task.id, 'ready')
     expect(submissions).toBe(2); expect(remoteIds).toContain('/v1/parse/jobs/j2')
