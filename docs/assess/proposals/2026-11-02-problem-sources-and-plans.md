@@ -1,6 +1,6 @@
 # 题源要有凭据，每种测试都按它的计划组卷
 
-> 来源：11-02 的外部审查（[报告](../../history/2026-11-audit/report.pdf)，括号里是报告的编号）。修复顺序见 [PLAN](../../PLAN.md#6-开发路线)。知识点合并后组卷找不到题（L14）见 [知识身份一致](../../knowledge/proposals/2026-11-02-identity-consistency.md)。
+> 来源：11-02 的外部审查（[报告](../../history/2026-11-audit/report.pdf)，括号里是报告的编号）。修复顺序见 [现在](../../now.md#修复顺序)。知识点合并后组卷找不到题（L14）见 [知识身份一致](../../knowledge/proposals/2026-11-02-identity-consistency.md)。
 
 ## 问题
 

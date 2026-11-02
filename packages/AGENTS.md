@@ -4,7 +4,7 @@
 
 ## 单元与契约
 
-- TypeScript + pnpm 工作区；DSH 锁定 `0.2.0-rc.2`。按本机这个版本的真实接口开发（`.tools/dsh/node_modules/@deepseek-ai/*/lib/types`），不凭印象。
+- TypeScript + pnpm 工作区；DSH 锁定 `0.2.0-rc.2`。按本机这个版本的真实接口开发（`.tools/dsh/node_modules/@deepseek-ai/*/lib/types`），不凭印象。设计说明看 DSH 仓库（github.com/deepseek-ai/deepseek-harness）的 `docs/`（先读 `architecture.md`、`capability-seams.md`）和 `packages/client` 下各包的说明。
 - 单元不互相 import 业务代码，通过 `@learning-agent/contracts` 的服务、类型和事件协作。`kit` 只放共用的辅助代码，不做业务数据的主人。
 - 服务名用 `learn*`，事件用 `learning/*`，接口用 `/api/learning/<单元>.<方法>` 精确路由。不接管 `/api` 的 RPC interceptor，它属于 DSH 网关。
 - 每类数据只有一个真相来源，每张表和每个文件只有一个主人单元；跨单元修改要调用主人的服务。
@@ -39,6 +39,7 @@
 
 ## 调用模型
 
+- 能用程序做的不用模型（数值判分、单位换算、验算、掌握状态推导）；大任务拆小（讲义按块写、判分按维度判）；要求固定格式，程序校验，不合格重试；检索时给足资料，不靠模型的记忆。每个用到模型的环节配一小组标准样例，用 DeepSeek 跑通才算验收。
 - 一次性调用（判分、总结、写讲义）都走 `kit` 的 `complete()`：它拒绝出错、截断和空的回复，不会把不完整的内容存下来。
 - `deepseek-flash` 先思考再作答，思考也算在 `maxTokens` 里。输出额度要留足（判分、总结 4000，讲义 16000），太小会表现为"空回复"或"截断"。学习者在 设置 › 模型 › 高级设置 里设的最大输出会压低这个额度（`complete()` 取两者中较小的）。
 - 模型在 JSON 里写 LaTeX 常常不双写反斜杠（`\rho` 会变成回车加 `ho`）。工具参数和 `parseJsonReply` 已统一修复；新写解析 JSON 的地方要用这两个入口。
@@ -47,6 +48,6 @@
 
 ## 组合包与 profile
 
-- 学习工作台是组合包 `@learning-agent/app`：单元和 Agent 预设写在 `packages/app/cordis.patch.yml`，改了要重启 DSH。新增单元要改这个文件、`packages/app/package.json` 和 `scripts/dev-profile.sh`，再运行 `sh scripts/dev-profile.sh`。
+- 不 fork DSH。学习工作台是组合包 `@learning-agent/app`：叠在 DSH 的基础组合包上，关掉 DSH 自带的界面和编程预设；单元和 Agent 预设写在 `packages/app/cordis.patch.yml`，改了要重启 DSH。新增单元要改这个文件、`packages/app/package.json` 和 `scripts/dev-profile.sh`，再运行 `sh scripts/dev-profile.sh`。
 - 只有前端的包也要有一行和一个后端入口：DSH 加载每一行的后端入口后，才扫描前端模块。
 - DSH 保存一项设置时，会把这一行的整份配置固定在学习者那一层。所以单元的插件行不带配置（默认值写在单元的 Config 里），设置也不放进预设这类带大段配置的行。

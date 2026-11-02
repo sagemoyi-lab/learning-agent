@@ -8,17 +8,17 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(import.meta.dirname, '..')
 const SKIP = new Set(['node_modules', '.git', '.scratch', '.tools', '.data', '.dsh-home', 'dist', 'lib', 'materials', 'history'])
 
-/** Character ceilings (Chinese text, so characters rather than words). Raise one only when the content needs it. */
+/**
+ * Character ceilings (Chinese text, so characters rather than words). Raise one only when the content needs it.
+ * now.md says what is in progress, what waits for the learner and what comes next, nothing about what is done.
+ */
 const BUDGETS: Record<string, number> = {
   'AGENTS.md': 3800,
   'packages/AGENTS.md': 3600,
   'docs/development.md': 3300,
-  'docs/PLAN.md': 9800,
+  'docs/now.md': 1800,
   'docs/contracts.md': 11800,
 }
-
-/** PLAN's "现在" says what is in progress and what waits for the learner, nothing about what is done. */
-const NOW_BUDGET = 800
 
 /** A design document says how the unit works now: these sections, in this order, and no batches, acceptance criteria or progress labels. */
 const DESIGN_SECTIONS = ['## 概要', '## 数据与接口', '## 关键决定', '## 已知限制与以后再做']
@@ -59,14 +59,6 @@ function prose(text: string): string {
 describe('documentation', () => {
   it('keeps the always-read documents within their budgets', () => {
     for (const [path, ceiling] of Object.entries(BUDGETS)) expect([...read(path)].length, path).toBeLessThanOrEqual(ceiling)
-  })
-
-  it("keeps PLAN's 现在 short", () => {
-    const plan = read('docs/PLAN.md')
-    const start = plan.indexOf('## 7. 现在')
-    expect(start).toBeGreaterThan(0)
-    const end = plan.indexOf('\n## ', start + 1)
-    expect([...plan.slice(start, end)].length).toBeLessThanOrEqual(NOW_BUDGET)
   })
 
   it('design documents describe the unit as it is now', () => {

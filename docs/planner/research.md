@@ -1,7 +1,7 @@
 # 调度做深调研
 
 > 2026-10-11 · 对应 PLAN 中 learner 之后的 planner · 状态：证据与反例复核完成，可供设计评审；下文是推荐设计、契约补充建议和验收草案，尚未实现或采纳为正式契约。
-> 代码基线：`6eababc`；learner A、B、C 已技术验收。依据：[总体计划](../PLAN.md)、[调度现状](design.md)、[掌握分析现状](../learner/design.md)、[学习流程](../journey.md)、[契约](../contracts.md)，以及下文的一手研究、官方文档和开源源码。
+> 代码基线：`6eababc`；learner A、B、C 已技术验收。依据：总体计划（当时的 `docs/PLAN.md`）、[调度现状](design.md)、[掌握分析现状](../learner/design.md)、[学习流程](../journey.md)、[契约](../contracts.md)，以及下文的一手研究、官方文档和开源源码。
 > 范围：一门课的下一步、复查、跨课程待办、中断后的恢复、期限判断。按 `learning-handoff-review` 核对接续边界，按 `learning-docs` 组织报告，按 `learning-simplify` 只列精简候选；不改产品实现。
 
 推荐按 **A 下一步可信、可接续 → B 有上限的复查 → C 今日安排、回来后的恢复与期限判断** 做深。程序根据各单元的事实选动作，主老师解释和执行教学工作。首轮用明确的规则，不引入新的学习模型、排程服务或工作流引擎。

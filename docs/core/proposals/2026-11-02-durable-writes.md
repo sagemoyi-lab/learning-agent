@@ -1,6 +1,6 @@
 # 文件和数据库的写入出错后能恢复
 
-> 来源：11-02 的外部审查（[报告](../../history/2026-11-audit/report.pdf)，括号里是报告的编号）。修复顺序见 [PLAN](../../PLAN.md#6-开发路线)。页面上的修改怎样不被旧内容覆盖，在各主人单元的提案里：[讲义](../../textbook/proposals/2026-11-02-edits-and-checks.md)、[批注](../../annotation/proposals/2026-11-02-reliable-annotations.md)、[目标](../../curriculum/proposals/2026-11-02-stale-conclusions.md)。
+> 来源：11-02 的外部审查（[报告](../../history/2026-11-audit/report.pdf)，括号里是报告的编号）。修复顺序见 [现在](../../now.md#修复顺序)。页面上的修改怎样不被旧内容覆盖，在各主人单元的提案里：[讲义](../../textbook/proposals/2026-11-02-edits-and-checks.md)、[批注](../../annotation/proposals/2026-11-02-reliable-annotations.md)、[目标](../../curriculum/proposals/2026-11-02-stale-conclusions.md)。
 
 ## 问题
 

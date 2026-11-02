@@ -168,7 +168,7 @@
 
 ### 7.1 接口
 
-- 路径是 `/api/learning/<单元>.<方法>`（如 `/api/learning/assess.submit`），经 `core` 的接口工具注册，沿用 DSH 的 RPC 信封；不接管 `/api` 的 RPC interceptor。
+- 路径是 `/api/learning/<单元>.<方法>`（如 `/api/learning/assess.submit`），经 `core` 的接口工具注册，沿用 DSH 的 RPC 信封；不接管 `/api` 的 RPC interceptor，暂不用 DSH 的类型化接口生成。
 - 上传和读原件这类二进制接口直接注册在 DSH 的认证路由上：`library.upload`、`library.original`、`library.pdfAsset`，`assess.upload`、`assess.photo`。DSH 的流式请求体只用于 POST，所以上传和读取分成两个接口。
 - 请求用契约包的数据格式校验。出错返回 `{ code: 'learning/<单元>/<原因>', message, details }`；校验失败是 `learning/invalid-input`，`message` 把各条说明连成一句话，原始结果在 `details.issues`。
 

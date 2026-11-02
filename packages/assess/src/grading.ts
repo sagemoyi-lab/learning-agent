@@ -1,5 +1,5 @@
 // Rule grading: numeric, choice and (when equivalence can be shown) expression answers are checked by
-// program, never by the model (docs/PLAN.md, model strategy). Numeric answers are read from the answer
+// program, never by the model (packages/AGENTS.md, 调用模型). Numeric answers are read from the answer
 // box, so the working above it never supplies the number; units are converted before comparing.
 import type { Answer, AnswerInput, Grading, SingleAnswer, Verdict } from '@learning-agent/contracts'
 import { convert, math, normalizeUnit, prettyUnit, splitQuantity, unitOf } from './units.ts'

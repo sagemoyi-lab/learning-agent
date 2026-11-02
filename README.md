@@ -1,33 +1,41 @@
 # 学习工作台（learning-agent）
 
-一个本地运行的个人学习工作台，基于 DeepSeek Harness（DSH，cordis 插件体系）开发。
+一个本地运行的个人学习工作台，基于 DeepSeek Harness（DSH，cordis 插件体系）开发，一门课就是一个项目。Agent 当老师：和你确认目标，摸清你的知识边界，一个阶段一个阶段地写讲义、发布学习任务，用有出处的题目测试你；你随时可以在侧栏提问、在讲义上批注。学到的东西沉淀在一张知识网里：你真正会了什么、凭什么这么判断、这些知识从哪里来。判断"学会"只看撤掉帮助后能不能独立做出来，隔一段时间、换一道题还会不会。
 
-- 总体计划：[docs/PLAN.md](docs/PLAN.md)（总览、单元地图和"现在"）；每个单元的设计、现状和关键决定在 `docs/<单元>/design.md`
-- 接续开发的约定（所有接手的助手共用）：[AGENTS.md](AGENTS.md)；本机构建、启动、测试和验收的做法：[docs/development.md](docs/development.md)
-- 插件之间的契约：[docs/contracts.md](docs/contracts.md)
-- 要试用的地方：[docs/trial.md](docs/trial.md)
-- 开发技能（接手验收、界面审美复核等具体做法，Claude 和 Codex 共用）：[.agents/skills/](.agents/skills)，用法见 AGENTS.md 的"技能"一节
+- 现在在做什么、在等你什么：[docs/now.md](docs/now.md)；要你试用的：[docs/trial.md](docs/trial.md)
+- 学习的原则和流程：[docs/journey.md](docs/journey.md)；每个单元怎么运作、为什么这样做：下表各单元的设计文档
+- 单元之间的契约：[docs/contracts.md](docs/contracts.md)
+- 开发约定（所有接手的助手共用）：[AGENTS.md](AGENTS.md)；本机构建、启动、测试和验收：[docs/development.md](docs/development.md)；开发技能：[.agents/skills/](.agents/skills)
+- 各文档分别管什么：[learning-docs 技能](.agents/skills/learning-docs/SKILL.md)
 
 ## 目录
 
 | 路径 | 内容 |
 |---|---|
+| `packages/core` | [核心](docs/core/design.md)：数据库、课程文件读写、版本与变更日志、会话归属、学习证据日志、前端接口与变更推送 |
+| `packages/shell` | [外壳](docs/shell/design.md)：整页布局、图标栏和侧栏、标签页和历史、右侧栏、状态栏、深浅色、插槽、共享界面控件 |
+| `packages/library` | [资料库](docs/library/design.md)：解析、切块、检索、出处定位、联网找权威资料 |
+| `packages/knowledge` | [知识模型](docs/knowledge/design.md)：节点、关系、出处；全局图与课程局部图 |
+| `packages/goal` | [目标](docs/goal/design.md)：目标协商、调研、目标说明和考试档案 |
+| `packages/assess` | [题库与测试](docs/assess/design.md)：题源分级、题池、摸底、组卷、判分 |
+| `packages/curriculum` | [课程设计](docs/curriculum/design.md)：路线、阶段设计书、课时与任务、复盘、结课 |
+| `packages/textbook` | [讲义](docs/textbook/design.md)：一章一份配合原书读的笔记，段落块与出处 |
+| `packages/annotation` | [批注](docs/annotation/design.md)：批注锚定、分类，转成信号或提案 |
+| `packages/sidechat` | [侧边会话](docs/sidechat/design.md)：带页面上下文的隔离会话、总结、提案 |
+| `packages/tutor` | [主老师](docs/tutor/design.md)：老师的会话和简报、交回主老师、课时小结、处理提案 |
+| `packages/learner` | [掌握分析](docs/learner/design.md)：作答、帮助、信号 → 证据 → 掌握状态 |
+| `packages/planner` | [调度](docs/planner/design.md)：下一步、没交的测试、建议的复查、回来后怎么接上、能不能赶上期限 |
+| `packages/settings` | [设置](docs/settings/design.md)：模型、在线服务和密钥、外观、数据位置、插件清单 |
 | `packages/contracts` | 契约包：ID、数据格式、服务/事件/插槽声明（不含业务逻辑，被打进每个单元的包里） |
-| `packages/core` | `core` 单元（后端）：数据库、课程文件、变更与证据日志、会话归属、接口和变更推送 |
-| `packages/shell` | 外壳（前端）：接管整页；图标栏和侧栏、标签页和前进后退、右侧栏（提问和出处）、状态栏和 Ctrl K 命令面板；全部设计变量和样式（`shell.css`，浅色与深色）；`learning.*` 插槽、`ctx.learnShell` |
-| `packages/library` ～ `packages/planner` | 各功能单元：资料、知识、目标、测评、课程设计、教材、批注、掌握分析、老师与侧边会话、下一步调度 |
-| `packages/settings` | 设置页：模型和模型服务、资料服务、外观、数据与隐私、插件清单；读写 DSH 的设置、密钥、模型和插件服务 |
-| `packages/kit` | 共用辅助代码、前端加载与操作状态、老师和侧边会话共用的聊天组件 |
+| `packages/kit` | 共用辅助代码：一次性模型调用、设置读取、前端加载与操作状态、共享界面控件和聊天组件；不持有业务数据 |
 | `packages/app` | 组合包 `@learning-agent/app`：在 DSH 服务端和客户端内核之上关掉 DSH 自带界面，挂上我们的单元和 Agent 预设 |
-| `profile/` | `learning` profile 的初始文件：选中 DSH 的两个基础组合包；`cordis.patch.yml` 是学习者自己的一层（设置页保存的设置写在这里）；`pnpm-workspace.yaml` 让 profile 用自己的锁文件 |
+| `profile/` | `learning` profile 的初始文件（见 [development.md](docs/development.md)"profile 和组合包"） |
 | `tests/` | 跨单元的自动测试：`flow.test.ts` 用合成资料跑通整条最小学习流程 |
 | `scripts/` | 构建、装 DSH、安装 profile、启动本机 MinerU；界面截图（`browser.ts`）、演示 GIF（`gif.ts`）和验收用的假模型服务（`fake-openai.ts`） |
 | `.agents/skills/` | 开发技能（`.claude/skills/` 是 Claude Code 读取的入口） |
 | `spikes/` | 验证代码，不是产品代码 |
 
 每个单元的源码约定：`src/index.ts` 是后端入口，`src/client.tsx` 是前端入口；`package.json` 的 `exports` 指向 `lib/` 下的构建产物。
-
-各单元做到哪了、现在在等什么，见 [PLAN](docs/PLAN.md) 的单元地图和"现在"。
 
 ## 开发
 
@@ -58,50 +66,19 @@ sh scripts/dev-profile.sh   # 安装 learning profile（已有的不覆盖），
 
 改了前端代码：重新 `pnpm build` 后刷新页面。改了后端代码：重新构建并重启 DSH（结束占用端口的那个 `dsh … learning` 进程）。
 
-## 设置
+## 设置和在线服务
 
-侧栏左下角的齿轮打开设置页，改动保存后立即生效，不用重启：
+侧栏左下角的齿轮打开设置页：各角色用哪个模型、模型服务、资料服务（PDF 解析、语义检索、联网搜索）、外观、数据与隐私、插件，保存后立即生效（见 [settings](docs/settings/design.md)）。
 
-- **模型**：默认模型和思考强度；主老师、课堂记录、侧边提问、侧边会话总结、写教材、核对教材、判分、识别手写、知识抽取各自用哪个模型（不选就跟随默认）。下面是已接上的模型服务：DeepSeek 可以填密钥、改接口地址；"添加模型服务"可以接 DSH 认识的厂商（Kimi、通义千问、智谱等，只填密钥），或兼容 OpenAI / Anthropic 接口的服务（填地址和密钥，获取模型后勾选要用的）。每个服务都能"测试连接"，测试会发一次很短的请求。
-- **资料服务**：PDF 解析方式（MinerU 云端或本机）、MinerU 和 Voyage 的密钥、语义检索开关；联网搜索的首选服务和 Exa、博查、Tavily 的密钥；网站级别。都可以测试连接。
-- **外观、数据与隐私、插件、关于**：深浅色；学习库位置和哪些内容会发往哪个在线服务；组成学习工作台的插件和它们的运行状态（只看不改）；版本。
+在线服务的密钥可以在设置页填写，也可以写进 `.env`：`MINERU_API_KEY`（在 mineru.net 的 API 管理页申请）、`VOYAGEAI_API_KEY`、`EXA_API_KEY`、`BOCHA_API_KEY`、`TAVILY_API_KEY`。每个服务做什么、会发出去什么，见 [library](docs/library/design.md)"在线服务"。
 
-设置保存在已安装 profile 的 `.dsh-home/profiles/learning/cordis.patch.yml`，也可以手工改这个文件，保存后同样立即生效。密钥按名称读取：启动环境里的（`.env` 经 `dsh-env.sh` 导出）优先，设置页显示"来自启动时的环境变量"，不能在页面上改；在设置页填写的密钥保存在 `.dsh-home/.credentials.yaml`，页面只显示是否已填写，不显示内容。
-
-## PDF 导入和原文阅读
-
-默认用 MinerU 云端解析：在 设置 › 资料服务 填写 MinerU 密钥，或在 `.env` 写入 `MINERU_API_KEY`（在 mineru.net 的 API 管理页申请）。PDF 会上传到 MinerU；超过 200 页的书自动分段提交、按原页码合并，几百页的教材几分钟完成。
-
-解析方式在 设置 › 资料服务 里选（资料库的设置项 `parser`：`cloud` 默认，`local` 本机），下一次导入就用新的方式。
-
-本机解析用已验证的 MinerU 4.0.10，位于 `.tools/mineru`，模型须已下载，整本教材约 40 分钟。在仓库根目录的 PowerShell 先运行：
+PDF 默认用 MinerU 云端解析。要在本机解析（设置 › 资料服务 › 解析方式选本机），先准备好 `.tools/mineru` 里的 MinerU 4.0.10 和下载好的模型，再在仓库根目录的 PowerShell 运行：
 
 ```powershell
 pnpm mineru:start
 ```
 
-脚本只监听本机 `16580`；已有服务时复用，启动时隐藏后台窗口。日志与解析器临时产物在 `.scratch/mineru-runtime`，学习工作台自己的原件、结果与任务则保存在当前学习数据目录。默认连接地址是 `http://127.0.0.1:16580`，可以在设置页的"本机服务地址"（设置项 `localParserUrl`）指向另一个本机端口。
-
-打开“资料库”，选择或拖入不超过 200 MB 的 PDF，填写标题、页码偏移和课程角色，再点“上传并解析”。上传完成即可关闭页面；解析进度、失败原因、重试和取消都在“导入任务”里。服务未启动时原件保留，启动服务后点重试。程序重启会恢复未结束任务；解析器丢失任务时自动重新提交原件。
-
-完成后点“阅读原文”，或从教材、聊天、检索结果点击出处。阅读器支持翻页、缩放、旋转和章节跳转，有完整几何信息时高亮引用区域；旧解析缺少页面尺寸时定位到页并保留识别文本。可在“校正书上页码”输入当前 PDF 页对应的书页，再换另一页核对固定偏移。
-
-云端某个页段失败时，已完成部分会保存，程序按更小的页段自动补跑。多次失败会显示具体 PDF 页段；稍后点“重试”只补缺的页。资料只有完整解析并验证后才发布给老师。
-
-同一 PDF 会复用已有资料；“重新解析”生成新快照，原出处和原件仍可打开。本课主动重解析后改为使用新版本，其他课程保留原来的版本。高级导入入口继续保留；原件为 PDF 的高级导入资料也可以直接重新解析。解析完成不等于识别文字已经人工核对，公式可对照原 PDF 查看。
-
-## 联网找资料
-
-在 设置 › 资料服务 填写 Exa、博查或 Tavily 的密钥（或在 `.env` 写入 `EXA_API_KEY`、`BOCHA_API_KEY`、`TAVILY_API_KEY`），选一个首选服务（默认 Exa）；它出错或没有密钥时自动换下一家。
-
-- 进入课程后，资料库页的"联网找资料"按主题搜索。结果按网站定级：国内高校、政府和标准、出版社等是二级，国外高校、开放课程和论文是三级，点"加入本课"即可；百科、文库、问答和不认识的网站只当线索，只能点开看，觉得可信可以"信任这个网站"。
-- 主老师在资料库不够时也会联网找（`search_web`、`add_web_sources`）：二级以上直接加入，三级出现在"待你确认的网上资料"里，确认后才下载。
-- 网页保存正文，打不开时用 Exa 保存的副本并标明；网上的 PDF 和上传的一样交给 MinerU 解析，完成后可以按页引用。资料卡上有原网址，"移出本课"不删除资料，已有出处仍能打开。
-- 搜索只发送要找的主题，网上的 PDF 会上传到 MinerU；你的教材和学习记录不会发出去。网站级别可以在 设置 › 资料服务 › 网站级别 里改，你设的优先。
-
-## 语义检索
-
-在 设置 › 资料服务 填写 Voyage 密钥（或在 `.env` 写入 `VOYAGEAI_API_KEY`）后，资料导入完成会在后台建语义索引（资料卡显示进度），检索框和老师的查资料工具都按"关键词 + 语义 + 重排"检索，可以直接用问题检索；资料里没有相关内容时会明确说明。检索时问题和资料片段会发送到 Voyage AI。没有密钥，或在设置页关掉"按意思检索"（设置项 `semanticSearch`）时，只按关键词检索。
+脚本只监听本机 `16580`，已有服务时复用，启动时隐藏后台窗口；日志和解析器的临时文件在 `.scratch/mineru-runtime`。
 
 ## 许可证
 
