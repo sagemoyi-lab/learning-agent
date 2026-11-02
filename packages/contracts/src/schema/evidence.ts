@@ -22,7 +22,7 @@ const base = {
   context: LogContext.default({}),
 }
 
-/** How much help was given, least to most (minimal effective help, docs/journey.md principle 6). */
+/** How much help was given, least to most (principle 6, help just enough: docs/journey.md, 原则). */
 export const HelpLevel = z.enum(['hint', 'explanation', 'worked-solution', 'answer-revealed'])
 export type HelpLevel = z.infer<typeof HelpLevel>
 

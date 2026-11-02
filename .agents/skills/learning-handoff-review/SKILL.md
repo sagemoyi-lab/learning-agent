@@ -20,7 +20,7 @@ description: Claude 和 Codex 交接时使用：接手对方留下的提交或�
 
 ## 最容易漏的问题
 
-对照 [packages/AGENTS.md](../../../packages/AGENTS.md) 逐条看。下面这些只看代码片段看不出来，要特别留意。
+对照 [packages/AGENTS.md](../../../packages/AGENTS.md) 和它指向的契约 §1、journey 的原则逐条看。下面这些只看代码片段看不出来，要特别留意。
 
 - **数据的主人和写入路径**：
   - 有没有绕过主人单元，直接写别人的表或文件；
@@ -47,6 +47,7 @@ description: Claude 和 Codex 交接时使用：接手对方留下的提交或�
   - `.env`、`materials/`、`.data/`、`.scratch/` 不进提交；
   - 测试不调用付费服务；
   - 真实教材发往在线服务前，问过用户。
+- **同一件事的旧写法**：这次改了名字、结构或某个事实（设置项、默认值、流程、界面上的叫法），有没有在文档、链接的锚点、代码和测试注释、技能里搜一遍旧写法和引用，一起改？`tests/docs.test.ts` 能查出断掉的链接和引用、逐字相同的句子，查不出换了说法的旧描述。
 - 界面改动按 learning-ui-review 检查，给模型看的文字按 learning-prompts-tools 检查。
 
 ## 测试够不够
