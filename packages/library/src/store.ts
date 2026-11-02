@@ -97,10 +97,12 @@ const SECTION_SEPARATOR = ' › '
 
 export class LibraryStore {
   constructor(
-    private readonly sqlite: DatabaseSync,
+    private readonly connection: DatabaseSync | (() => DatabaseSync),
     private readonly transaction: <T>(fn: () => T) => T,
     private readonly dataRoot: string,
   ) {}
+
+  private get sqlite(): DatabaseSync { return typeof this.connection === 'function' ? this.connection() : this.connection }
 
   sources(): Source[] {
     return (this.sqlite.prepare(`SELECT data FROM library_sources WHERE id NOT IN

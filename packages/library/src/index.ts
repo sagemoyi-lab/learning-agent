@@ -52,13 +52,13 @@ class LearnLibraryService extends Service implements LearnLibrary {
     super(ctx, 'learnLibrary')
     const core = ctx.learnCore
     core.db.migrate('library', libraryMigrations)
-    this.store = new LibraryStore(core.db.sqlite, fn => core.db.transaction(fn), core.dataRoot)
+    this.store = new LibraryStore(() => core.db.sqlite, fn => core.db.transaction(fn), core.dataRoot)
     this.parser = async () => {
       const choice = { parser: config.parser.get(), localUrl: config.localParserUrl.get() }
       return chooseParser(choice, choice.parser === 'cloud' ? await secret(ctx, MINERU_KEY) : undefined)
     }
     this.importer = new LibraryImports(ctx, this.store, this.parser)
-    this.index = new LibraryIndex(ctx, this.store, core.db.sqlite, fn => core.db.transaction(fn), async () =>
+    this.index = new LibraryIndex(ctx, this.store, () => core.db.sqlite, fn => core.db.transaction(fn), async () =>
       chooseEmbedder(config.semanticSearch.get(), config.semanticSearch.get() ? await secret(ctx, VOYAGE_KEY) : undefined))
     this.web = new LibraryWeb(ctx, this.store, this.importer, { provider: () => config.searchProvider.get() as ProviderId, key: name => secret(ctx, name) })
   }

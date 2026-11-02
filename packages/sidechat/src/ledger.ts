@@ -85,7 +85,7 @@ export interface Ledger {
 }
 
 export function installLedger(ctx: Context, deps: { model(): string | undefined }): Ledger {
-  const sqlite = ctx.learnCore.db.sqlite
+  const sqlite = { prepare: (sql: string) => ctx.learnCore.db.sqlite.prepare(sql) }
   const logger = ctx.logger('learning-sidechat')
   const chains = new Map<string, Promise<void>>()
   const failures = new Map<string, number>()

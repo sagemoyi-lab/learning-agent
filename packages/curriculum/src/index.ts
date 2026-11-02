@@ -63,7 +63,7 @@ class LearnCurriculumService extends Service implements LearnCurriculum {
   constructor(ctx: Context) {
     super(ctx, 'learnCurriculum')
     ctx.learnCore.db.migrate('curriculum', curriculumMigrations)
-    this.store = new CurriculumStore(ctx.learnCore.db.sqlite)
+    this.store = new CurriculumStore(() => ctx.learnCore.db.sqlite)
   }
 
   private get core() {

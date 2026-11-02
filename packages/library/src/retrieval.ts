@@ -54,7 +54,7 @@ export class LibraryIndex {
   constructor(
     private readonly ctx: Context,
     private readonly store: LibraryStore,
-    private readonly sqlite: DatabaseSync,
+    private readonly connection: DatabaseSync | (() => DatabaseSync),
     private readonly transaction: <T>(fn: () => T) => T,
     embedder?: Embedder | (() => Promise<Embedder | undefined>),
   ) {
@@ -62,7 +62,9 @@ export class LibraryIndex {
     if (typeof embedder !== 'function') this.embedder = embedder
   }
 
-  /** The embedder the settings choose right now, without starting any indexing. */
+  private get sqlite(): DatabaseSync { return typeof this.connection === 'function' ? this.connection() : this.connection }
+
+  /** The embedder selected by the current settings. */
   current(): Promise<Embedder | undefined> {
     return this.embedderNow()
   }

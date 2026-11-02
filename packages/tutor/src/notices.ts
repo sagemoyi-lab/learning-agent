@@ -50,7 +50,7 @@ export interface NoticeDeps {
 }
 
 export function installNotices(ctx: Context, deps: NoticeDeps): void {
-  const sqlite = ctx.learnCore.db.sqlite
+  const sqlite = { prepare: (sql: string) => ctx.learnCore.db.sqlite.prepare(sql) }
   const logger = ctx.logger('learning-tutor')
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
   const running = new Map<string, Promise<void>>()

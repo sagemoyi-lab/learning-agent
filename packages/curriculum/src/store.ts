@@ -59,7 +59,9 @@ export function supportsOf(draft: Draft, open: readonly Stage[], position: numbe
 }
 
 export class CurriculumStore {
-  constructor(private readonly sqlite: DatabaseSync) {}
+  constructor(private readonly connection: DatabaseSync | (() => DatabaseSync)) {}
+
+  private get sqlite(): DatabaseSync { return typeof this.connection === 'function' ? this.connection() : this.connection }
 
   stages(courseId: string): Stage[] {
     return (this.sqlite.prepare('SELECT data FROM curriculum_stages WHERE course_id = ? ORDER BY idx').all(courseId) as { data: string }[])
