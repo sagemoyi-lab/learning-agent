@@ -4,9 +4,10 @@
 // stage's knowledge points, and the points its material sources but no paragraph explains are reported; an
 // unusable plan still gives the sections. Synthetic material, fake model; a restart is a second harness on the
 // same data.
-import { writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
+import { handoutFile } from '@learning-agent/contracts'
 import { createHarness, textbookSettled, type Harness } from '../harness.ts'
 import {
   blockOf, confirm, handoutCourse, handoutText, isOverview, isPlan, isSection, materialOf, planReply, sectionOf, sectionReply, usual,
@@ -88,6 +89,36 @@ it('keeps the failure count across a restart, so the second failure goes to the 
   expect(await again(after)).toBe('failed')
   expect(after.h.ctx.learnTextbook.status(lesson!.id)).toMatchObject({ state: 'failed', failures: 2 })
   expect(await after.h.ctx.learnPlanner.next(after.courseId)).toMatchObject({ actor: 'learner', title: '讲义生成失败' })
+})
+
+it.each(['created', 'edited', 'deleted'])('preserves the original generation baseline across restart when the file is %s while stopped', async kind => {
+  let fail = false
+  const course = await setUp(call => {
+    if (fail && isSection(call)) throw new Error('synthetic interruption')
+    return usual(call)
+  })
+  const file = handoutFile(course.stage.folder)
+  // Use the owner's actual path rather than reconstructing its layout.
+  if (kind !== 'created') expect(await confirm(course)).toBe('ready')
+  fail = true
+  if (kind === 'created') expect(await confirm(course)).toBe('failed')
+  else {
+    // Clear cached generation replies by starting from a published run.
+    expect(await again(course)).toBe('failed')
+  }
+  const row = course.h.ctx.learnCore.db.sqlite.prepare('SELECT data FROM textbook_handouts WHERE stage_id=?').get(course.stage.id) as { data: string }
+  const run = JSON.parse(row.data) as { baseline: { hash: string | null }; state: string }
+  expect(run.baseline.hash === null).toBe(kind === 'created')
+  const actualFile = course.h.ctx.learnCurriculum.lesson(course.lessons[0]!.id)!.textbookFile ?? file
+  const full = join(course.h.ctx.learnCore.courses.folder(course.courseId), actualFile)
+  if (kind === 'deleted') rmSync(full)
+  else writeFileSync(full, '停机期间补写的笔记。\n')
+  setState(course, 'running')
+  const after = await restart(course, usual)
+  expect(await textbookSettled(after.h.ctx, after.lessons[0]!.id)).toBe('failed')
+  const status = after.h.ctx.learnTextbook.status(after.lessons[0]!.id)
+  expect(status.conflict?.generated).toContain('静止流体')
+  expect((await after.h.ctx.learnCore.files.read(after.courseId, actualFile))?.text ?? null).toBe(kind === 'deleted' ? null : '停机期间补写的笔记。\n')
 })
 
 it('finishes a handout published just before a restart without writing it again or handing it over twice', async () => {

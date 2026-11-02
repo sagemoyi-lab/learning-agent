@@ -882,6 +882,7 @@ export type BlockWithText = Block & { readonly text: string }
  * a restart resumes queued and interrupted stages.
  */
 export interface LessonTextbookStatus {
+  readonly conflict?: { readonly original: string | null; readonly current: string | null; readonly generated: string }
   /** `running` covers queued handouts too; `failed` is the last attempt's outcome. */
   readonly state: 'missing' | 'running' | 'ready' | 'failed'
   /** Progress while running, the reason when failed. */

@@ -171,6 +171,9 @@ const Run = z.object({
   points: z.array(z.object({ title: z.string(), done: z.boolean() })).default([]),
   /** The parts written so far, while the handout is being written. */
   draft: z.string().optional(),
+  /** Original publication baseline, including a missing file; never refreshed on restart. */
+  baseline: z.object({ hash: z.string().nullable(), text: z.string().nullable() }).optional(),
+  conflict: z.object({ current: z.string().nullable(), generated: z.string() }).optional(),
   /** Knowledge points sourced in the stage's material that no paragraph explains. */
   uncovered: z.array(z.string()).default([]),
   /** What the chapter's exercises need that no material explains. */
@@ -369,7 +372,7 @@ class LearnTextbookService extends Service implements LearnTextbook {
       }
     }
     const blocks = lesson.textbookFile ? this.blocks(stage.courseId, lesson.textbookFile) : []
-    if (run?.state === 'failed') return { state: 'failed', message: run.message, failures: run.failures, ...(blocks.length ? { blocks: blocks.length } : {}) }
+    if (run?.state === 'failed') return { state: 'failed', message: run.message, failures: run.failures, ...(blocks.length ? { blocks: blocks.length } : {}), ...(run.conflict ? { conflict: { original: run.baseline?.text ?? null, ...run.conflict } } : {}) }
     if (blocks.length === 0) return { state: 'missing' }
     const own = isHandout(stage, lesson.textbookFile) ? run : undefined
     const edited = this.editedOf(stage.courseId, blocks.map(block => block.id)).size
@@ -644,7 +647,7 @@ class LearnTextbookService extends Service implements LearnTextbook {
   private progress(stage: Stage, patch: Partial<Run> & Pick<Run, 'state'>): Run {
     const previous = this.runOf(stage.id)
     const fresh = !previous || (previous.state === 'ready' && patch.state !== 'ready')
-    const restart = fresh ? { run: randomUUID().slice(0, 8), parts: {}, points: [], draft: undefined, step: undefined, startedAt: undefined, missing: [], web: [], notes: [], usage: { calls: 0, input: 0, output: 0 } } : {}
+    const restart = fresh ? { run: randomUUID().slice(0, 8), parts: {}, points: [], draft: undefined, baseline: undefined, conflict: undefined, step: undefined, startedAt: undefined, missing: [], web: [], notes: [], usage: { calls: 0, input: 0, output: 0 } } : {}
     const run = this.saveRun(Run.parse({ stageId: stage.id, courseId: stage.courseId, ...previous, ...restart, ...patch, updatedAt: now() }))
     const state = run.state === 'ready' ? 'done' : run.state === 'failed' ? 'failed' : 'running'
     const first = this.ctx.learnCurriculum.lessons(stage.id)[0]
@@ -684,6 +687,8 @@ class LearnTextbookService extends Service implements LearnTextbook {
 
   generateLesson(lessonId: string): Promise<void> {
     const lesson = must(this.ctx.learnCurriculum.lesson(lessonId), 'textbook', '课时', lessonId)
+    const previous = this.runOf(lesson.stageId)
+    if (previous?.conflict && !this.inFlight.has(lesson.stageId)) this.saveRun({ ...previous, baseline: undefined, conflict: undefined, parts: {} })
     return this.generateStage(lesson.stageId)
   }
 
@@ -817,16 +822,18 @@ class LearnTextbookService extends Service implements LearnTextbook {
     const courseId = stage.courseId
     const lessons = curriculum.lessons(stageId)
     const file = handoutFile(stage.folder)
-    const before = await this.ctx.learnCore.files.read(courseId, file)
+    const currentFile = await this.ctx.learnCore.files.read(courseId, file)
     const previous = this.runOf(stageId)
     // Published just before a restart: only the index, the status and the handoff are left.
-    if (previous?.state === 'running' && before && parseFrontmatter(before.text).data.run === previous.run) {
-      this.publish(stage, before.text)
+    if (previous?.state === 'running' && currentFile && parseFrontmatter(currentFile.text).data.run === previous.run) {
+      this.publish(stage, currentFile.text)
       return
     }
+    const baseline = previous?.baseline ?? { hash: currentFile?.hash ?? null, text: currentFile?.text ?? null }
+    const before = baseline.text === null ? undefined : { text: baseline.text, hash: baseline.hash! }
     // An unfinished run keeps its id and the replies it already has; its clock keeps its start.
     const startedAt = previous?.state === 'running' && previous.startedAt ? previous.startedAt : now()
-    this.progress(stage, { state: 'running', message: `正在整理 ${stage.title} 的提纲`, step: 'plan', startedAt, points: [], draft: undefined })
+    this.progress(stage, { state: 'running', message: `正在整理 ${stage.title} 的提纲`, step: 'plan', startedAt, points: [], draft: undefined, baseline })
     try {
       if (lessons.length === 0) throw new Error(`${stage.title} 还没有课时，先在设计书里排好课时`)
       const sections = this.sectionsOf(courseId, lessons)
@@ -1073,6 +1080,11 @@ class LearnTextbookService extends Service implements LearnTextbook {
       const run = this.saveRun({ ...this.runOf(stageId)!, step: 'publish', notes, missing: [...new Set([...missing, ...notExplained])], pending: Object.fromEntries([...checks].map(([id, check]) => [id, CheckRow.parse({ ...check, sources: [...check.sources] })])) }).run
       const version = Number(before ? parseFrontmatter(before.text).data.version ?? 0 : 0) + 1
       const text = withFrontmatter({ stage: stage.id, title: stage.title, version, generatedAt: now(), run }, body)
+      const latest = await this.ctx.learnCore.files.read(courseId, file)
+      if ((latest?.hash ?? null) !== baseline.hash) {
+        this.saveRun({ ...this.runOf(stageId)!, conflict: { current: latest?.text ?? null, generated: text }, draft: text })
+        throw new LearningApiError('learning/textbook/conflict', '讲义被修改过，没有覆盖；生成结果保留在冲突草稿中')
+      }
       // Not over a file that changed while the handout was written (an edit in the reader or outside the app).
       const change = await this.ctx.learnCore.files.write(courseId, file, text, {
         actor: 'system',
@@ -1295,8 +1307,9 @@ class LearnTextbookService extends Service implements LearnTextbook {
     if (!row) return undefined
     const block = Block.parse(JSON.parse(row.data))
     const file = await this.ctx.learnCore.files.read(courseId, block.file)
-    const text = file ? indexBlocks(file.text).find(item => item.id === blockId)?.text ?? '' : ''
-    return { ...block, text }
+    const current = file ? indexBlocks(file.text).find(item => item.id === blockId) : undefined
+    if (!current) return undefined
+    return { ...block, hash: current.hash, text: current.text }
   }
 }
 

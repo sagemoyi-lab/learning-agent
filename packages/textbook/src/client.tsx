@@ -366,6 +366,12 @@ function Reader({ courseId, lessonId, renderSlot }: { courseId: string; lessonId
         {status.state === 'failed' && (
           <Callout tone="bad" title="讲义没有生成成功" actions={<Button size="sm" icon={RotateCw} loading={regenerate.busy} onClick={generate}>重新生成</Button>}>{status.message}</Callout>
         )}
+        {status.conflict && <Section title="讲义有冲突，当前文件未被覆盖">
+          <p>下面保留三份内容。可以复制生成草稿中的段落到当前文件手动合并；重新生成会以当前文件为新基准。</p>
+          <details><summary>生成开始时的文件</summary><shell.Markdown text={status.conflict.original ?? '当时文件不存在'} /></details>
+          <details><summary>现在保留的文件</summary><shell.Markdown text={status.conflict.current ?? '当前文件不存在'} /></details>
+          <details><summary>未发布的生成草稿</summary><shell.Markdown text={status.conflict.generated} /></details>
+        </Section>}
         {!data.text && !running && status.state !== 'failed' && (
           <div className="la-card">
             <EmptyState icon={Sparkles} title="这一章的讲义还没有生成" description="讲义配合教材读：开头是名词表和公式表，按小节简短地讲，最后是易混点和题型与方法。"
