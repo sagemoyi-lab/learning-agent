@@ -63,4 +63,17 @@ export const coreMigrations: readonly Migration[] = [
       CREATE INDEX core_proposals_course ON core_proposals (course_id, status);
     `,
   },
+  {
+    version: 2,
+    sql: `
+      CREATE TABLE core_file_publications (
+        change_id TEXT PRIMARY KEY,
+        course_id TEXT NOT NULL,
+        path TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending', 'published', 'failed', 'external')),
+        data TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX core_file_pending ON core_file_publications(course_id, path) WHERE status='pending';
+    `,
+  },
 ]

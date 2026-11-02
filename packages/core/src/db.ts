@@ -70,6 +70,9 @@ export class Database {
   }
 
   /** Run `fn` atomically. Nested calls join the outermost transaction. */
+  get inTransaction(): boolean { return this.depth > 0 }
+
+  /** Nested database calls join the outermost transaction. */
   transaction<T>(fn: () => T): T {
     if (this.depth > 0) {
       this.depth += 1

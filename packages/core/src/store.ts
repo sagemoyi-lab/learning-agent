@@ -1,6 +1,6 @@
 // core's data: courses, course files with their change log, session links, the evidence log, proposals.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import {
   COURSE_LAYOUT,
@@ -52,7 +52,36 @@ export class CoreStore {
     private readonly dataRoot: string,
     private readonly emit: Emit,
     private readonly workspaces: () => WorkspaceRegistryLike,
-  ) {}
+  ) { this.recoverPublications() }
+
+  /** Recover durable intents by comparing actual content, never replaying over outside edits. */
+  private recoverPublications(courseId?: string, path?: string): void {
+    const rows = this.db.sqlite.prepare(`SELECT data FROM core_file_publications WHERE status='pending'${courseId ? ' AND course_id=? AND path=?' : ''}`).all(...(courseId ? [courseId, path!] : [])) as { data: string }[]
+    for (const row of rows) {
+      const change = Change.parse(JSON.parse(row.data))
+      if (change.target.kind !== 'file' || !change.target.courseId) continue
+      const full = this.filePath(change.target.courseId, change.target.path)
+      const actual = existsSync(full) ? readFileSync(full, 'utf8') : null
+      if (actual === change.after) this.finishPublication(change, false)
+      else this.db.transaction(() => {
+        this.db.sqlite.prepare('UPDATE core_file_publications SET status=? WHERE change_id=?').run(actual === change.before ? 'failed' : 'external', change.id)
+      })
+    }
+  }
+
+  private finishPublication(change: Change, notify: boolean): void {
+    if (change.target.kind !== 'file' || !change.target.courseId) throw new Error('not a course file')
+    const { courseId, path } = change.target
+    this.db.transaction(() => {
+      this.db.sqlite.prepare('INSERT OR IGNORE INTO core_changes (id, at, course_id, target_key, data) VALUES (?, ?, ?, ?, ?)').run(change.id, change.at, courseId, targetKey(change.target), JSON.stringify(change))
+      this.rememberHash(courseId, path, change.after === null ? undefined : sha256(change.after))
+      this.db.sqlite.prepare("UPDATE core_file_publications SET status='published' WHERE change_id=?").run(change.id)
+      if (notify) {
+        this.db.afterCommit(() => this.emit('learning/change-applied', change))
+        this.db.afterCommit(() => this.emit('learning/doc-changed', { courseId, path, changeId: change.id }))
+      }
+    })
+  }
 
   // ── courses ──────────────────────────────────────────────────────────────
 
@@ -149,8 +178,9 @@ export class CoreStore {
     this.db.afterCommit(() => this.emit('learning/change-applied', change))
   }
 
-  /** Write (or delete, when `text` is null) one course file and log the change, atomically with the database. */
+  /** Commit intent, replace and sync the file, then complete the ledger; interrupted intents are reconciled. */
   private commitFile(courseId: string, path: string, before: string | null, text: string | null, meta: ChangeMeta & { revertOf?: string }): Change {
+    if (this.db.inTransaction) throw new LearningApiError('learning/core/file-in-transaction', '文件发布不能嵌在数据库事务内')
     const full = this.filePath(courseId, path)
     const change = Change.parse({
       id: newId('change'),
@@ -165,19 +195,23 @@ export class CoreStore {
       ...(meta.revertOf ? { revertOf: meta.revertOf } : {}),
     })
     this.db.transaction(() => {
-      this.insertChange(change, courseId)
-      this.rememberHash(courseId, path, text === null ? undefined : sha256(text))
-      // The file operation is the last step: if it throws, the transaction rolls back.
-      if (text === null) {
-        rmSync(full, { force: true })
-      } else {
-        mkdirSync(dirname(full), { recursive: true })
-        const temporary = `${full}.${process.pid}.tmp`
-        writeFileSync(temporary, text, 'utf8')
-        renameSync(temporary, full)
-      }
-      this.db.afterCommit(() => this.emit('learning/doc-changed', { courseId, path, changeId: change.id }))
+      this.db.sqlite.prepare("INSERT INTO core_file_publications (change_id, course_id, path, status, data) VALUES (?, ?, ?, 'pending', ?)").run(change.id, courseId, path, JSON.stringify(change))
     })
+    if (text === null) rmSync(full, { force: true })
+    else {
+      mkdirSync(dirname(full), { recursive: true })
+      const temporary = `${full}.${change.id}.tmp`
+      try {
+        const fd = openSync(temporary, 'wx', 0o600)
+        try { writeFileSync(fd, text, 'utf8'); fsyncSync(fd) } finally { closeSync(fd) }
+        renameSync(temporary, full)
+      } finally { rmSync(temporary, { force: true }) }
+    }
+    if (process.platform !== 'win32') {
+      const fd = openSync(dirname(full), 'r')
+      try { fsyncSync(fd) } finally { closeSync(fd) }
+    }
+    this.finishPublication(change, true)
     return change
   }
 
@@ -198,6 +232,7 @@ export class CoreStore {
 
   /** Read a course file. A hash that differs from the last one core saw is logged as the learner's own edit. */
   private readFile(courseId: string, path: string): CourseFile | undefined {
+    this.recoverPublications(courseId, path)
     const full = this.filePath(courseId, path)
     if (!existsSync(full)) return undefined
     const text = readFileSync(full, 'utf8')
@@ -356,4 +391,3 @@ export class CoreStore {
     },
   }
 }
-
